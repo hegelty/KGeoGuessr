@@ -1,0 +1,92 @@
+[
+  {
+    "id": "bundang-techno-1",
+    "name": "분당 테크노파크 인근",
+    "region": "경기 성남",
+    "panorama": {
+      "position": { "lat": 37.3599605, "lng": 127.1058814 },
+      "initialPov": { "pan": -135, "tilt": 8, "fov": 100 }
+    }
+  },
+  {
+    "id": "seoul-cityhall-1",
+    "name": "서울 시청 인근",
+    "region": "서울 중구",
+    "panorama": {
+      "position": { "lat": 37.5662952, "lng": 126.9779451 },
+      "initialPov": { "pan": 45, "tilt": 3, "fov": 95 }
+    }
+  },
+  {
+    "id": "busan-seomyeon-1",
+    "name": "서면 교차로 인근",
+    "region": "부산 부산진구",
+    "panorama": {
+      "position": { "lat": 35.157882, "lng": 129.059175 },
+      "initialPov": { "pan": 92, "tilt": 0, "fov": 95 }
+    }
+  },
+  {
+    "id": "daegu-downtown-1",
+    "name": "대구 동성로 인근",
+    "region": "대구 중구",
+    "panorama": {
+      "position": { "lat": 35.869113, "lng": 128.593265 },
+      "initialPov": { "pan": -10, "tilt": 2, "fov": 95 }
+    }
+  },
+  {
+    "id": "gwangju-station-1",
+    "name": "광주역 인근",
+    "region": "광주 북구",
+    "panorama": {
+      "position": { "lat": 35.165834, "lng": 126.90996 },
+      "initialPov": { "pan": 138, "tilt": 4, "fov": 95 }
+    }
+  },
+  {
+    "id": "daejeon-cityhall-1",
+    "name": "대전 시청 인근",
+    "region": "대전 서구",
+    "panorama": {
+      "position": { "lat": 36.3504119, "lng": 127.3845475 },
+      "initialPov": { "pan": -72, "tilt": 5, "fov": 95 }
+    }
+  },
+  {
+    "id": "ulsan-samsan-1",
+    "name": "울산 삼산동 인근",
+    "region": "울산 남구",
+    "panorama": {
+      "position": { "lat": 35.5383773, "lng": 129.3113596 },
+      "initialPov": { "pan": 115, "tilt": 2, "fov": 100 }
+    }
+  },
+  {
+    "id": "jeonju-hanok-1",
+    "name": "전주 한옥마을 인근",
+    "region": "전북 전주",
+    "panorama": {
+      "position": { "lat": 35.81533, "lng": 127.153565 },
+      "initialPov": { "pan": 18, "tilt": 1, "fov": 100 }
+    }
+  },
+  {
+    "id": "gangneung-beach-1",
+    "name": "강릉 경포대 인근",
+    "region": "강원 강릉",
+    "panorama": {
+      "position": { "lat": 37.795503, "lng": 128.896198 },
+      "initialPov": { "pan": -140, "tilt": -2, "fov": 95 }
+    }
+  },
+  {
+    "id": "jeju-airport-1",
+    "name": "제주공항 인근",
+    "region": "제주 제주시",
+    "panorama": {
+      "position": { "lat": 33.510413, "lng": 126.491353 },
+      "initialPov": { "pan": 65, "tilt": 0, "fov": 95 }
+    }
+  }
+]
