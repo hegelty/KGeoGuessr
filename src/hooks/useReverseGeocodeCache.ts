@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { reverseGeocode } from "@/lib/naver/reverseGeocode";
+import { reverseGeocode } from "@/lib/kakao/reverseGeocode";
 import type { LatLng } from "@/types/game";
 
 type State = {

@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import type { RoundResult } from "@/types/game";
 
 type Props = {
@@ -16,23 +15,31 @@ export function FinalSummary({ totalScore, history, restarting, onRestart }: Pro
       : history.reduce((sum, result) => sum + result.distanceKm, 0) / history.length;
 
   return (
-    <Card className="final-summary">
-      <p className="eyebrow">Game Complete</p>
-      <h2 className="hero-score">{totalScore.toLocaleString()} / 25,000</h2>
-      <p className="muted-text">평균 오차 {averageDistance.toFixed(2)} km</p>
-      <div className="history-list">
+    <div className="glass-panel final-summary-content">
+      <p className="eyebrow" style={{ fontSize: "1rem" }}>Game Complete</p>
+      <h2 className="final-score">{totalScore.toLocaleString()}</h2>
+      <p className="muted-text" style={{ fontSize: "1.2rem", marginBottom: "2rem" }}>
+        평균 오차 거리: <strong style={{ color: "var(--text)" }}>{averageDistance.toFixed(2)} km</strong>
+      </p>
+      
+      <div className="history-list" style={{ textAlign: "left", marginBottom: "3rem" }}>
         {history.map((result) => (
-          <div key={result.roundId} className="history-row">
-            <span>Round {result.roundNumber}</span>
-            <span>{result.score.toLocaleString()}점</span>
-            <span>{result.distanceKm.toFixed(1)} km</span>
+          <div key={result.roundId} className="history-row" style={{ display: "flex", justifyContent: "space-between", padding: "1rem 1.5rem", background: "rgba(255,255,255,0.05)", border: "none", borderBottom: "1px solid var(--line)", borderRadius: 0 }}>
+            <span style={{ fontWeight: 800, color: "var(--muted)" }}>Round {result.roundNumber}</span>
+            <span style={{ fontWeight: 700, color: "var(--secondary)" }}>+{result.score.toLocaleString()}점</span>
+            <span style={{ color: "var(--muted)" }}>{result.distanceKm.toFixed(1)} km</span>
           </div>
         ))}
       </div>
-      <Button onClick={onRestart} disabled={restarting} block>
-        {restarting ? "새 게임 준비 중..." : "다시 시작"}
+      
+      <Button 
+        className="button-primary button-massive" 
+        onClick={onRestart} 
+        disabled={restarting} 
+        style={{ width: "100%" }}
+      >
+        {restarting ? "새 게임 생성 중..." : "다시 플레이하기 ✨"}
       </Button>
-    </Card>
+    </div>
   );
 }
-

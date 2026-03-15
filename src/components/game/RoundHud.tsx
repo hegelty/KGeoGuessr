@@ -18,21 +18,26 @@ export function RoundHud({
   onSubmit,
 }: Props) {
   return (
-    <div className="hud">
-      <div>
-        <p className="eyebrow">Round</p>
-        <h2 className="hud-value">
+    <div className="glass-panel hud-bar">
+      <div className="hud-item">
+        <span className="hud-label">Round</span>
+        <span className="hud-value">
           {roundNumber} / {totalRounds}
-        </h2>
+        </span>
       </div>
-      <div>
-        <p className="eyebrow">Total Score</p>
-        <h2 className="hud-value">{totalScore.toLocaleString()}</h2>
+      <div className="hud-item">
+        <span className="hud-label">Score</span>
+        <span className="hud-value">{totalScore.toLocaleString()}</span>
       </div>
-      <Button onClick={onSubmit} disabled={!canSubmit || submitting}>
-        {submitting ? "제출 중..." : "추측 제출"}
-      </Button>
+      <div style={{ marginLeft: "auto" }}>
+        <Button 
+          className="button-primary" 
+          onClick={onSubmit} 
+          disabled={!canSubmit || submitting}
+        >
+          {submitting ? "제출 중..." : "추측 제출"}
+        </Button>
+      </div>
     </div>
   );
 }
-

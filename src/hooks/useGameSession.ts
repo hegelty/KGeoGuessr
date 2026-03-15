@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { GameSnapshot, LatLng } from "@/types/game";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -27,7 +27,12 @@ export function useGameSession() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const initRef = useRef(false);
+
   async function syncOrStart() {
+    if (initRef.current) return;
+    initRef.current = true;
+
     setLoading(true);
     setError(null);
 
