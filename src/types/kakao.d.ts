@@ -1,8 +1,7 @@
-export {};
-
 declare global {
   interface Window {
-    naver?: any;
+    kakao: any;
   }
 }
 
+export {};
