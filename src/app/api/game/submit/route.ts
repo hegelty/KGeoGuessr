@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   }
 
   const round = session.rounds[session.currentRoundIndex];
-  const answer = round.panorama.position;
+  const answer = round.panorama.resolvedPosition ?? round.panorama.position;
   const distanceKm = haversineDistanceKm(body.guess, answer);
   const score = calculateRoundScore(distanceKm);
 
@@ -44,4 +44,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json(toGameSnapshot(session));
 }
-

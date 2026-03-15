@@ -1,17 +1,57 @@
 "use client";
 
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { loadKakaoMaps } from "@/lib/kakao/loadKakaoMaps";
 import type { LatLng } from "@/types/game";
+
+export const GUESS_MAP_ASPECT_RATIO = 1.45;
+
+export type GuessMapSize = {
+  width: number;
+  height: number;
+};
 
 type Props = {
   guess: LatLng | null;
   answer?: LatLng | null;
   interactive?: boolean;
   onGuessChange?: (guess: LatLng) => void;
+  size: GuessMapSize;
+  minSize: GuessMapSize;
+  maxSize: GuessMapSize;
+  onSizeChange?: (size: GuessMapSize) => void;
 };
 
-export function GuessMap({ guess, answer = null, interactive = false, onGuessChange }: Props) {
+type ResizeState = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startWidth: number;
+};
+
+type BaseMapType = "ROADMAP" | "SKYVIEW" | "HYBRID";
+
+const MAP_TYPE_OPTIONS: Array<{ id: BaseMapType; label: string }> = [
+  { id: "ROADMAP", label: "지도" },
+  { id: "SKYVIEW", label: "위성" },
+  { id: "HYBRID", label: "하이브리드" },
+];
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+export function GuessMap({
+  guess,
+  answer = null,
+  interactive = false,
+  onGuessChange,
+  size,
+  minSize,
+  maxSize,
+  onSizeChange,
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const kakaoRef = useRef<any>(null);
@@ -20,11 +60,21 @@ export function GuessMap({ guess, answer = null, interactive = false, onGuessCha
   const lineRef = useRef<any>(null);
   const clickListenerRef = useRef<any>(null);
   const onGuessChangeRef = useRef(onGuessChange);
+  const resizeStateRef = useRef<ResizeState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [baseMapType, setBaseMapType] = useState<BaseMapType>("ROADMAP");
+  const [terrainEnabled, setTerrainEnabled] = useState(false);
 
   onGuessChangeRef.current = onGuessChange;
 
-  // Mount logic
+  function setMapInteractionEnabled(enabled: boolean) {
+    if (!mapRef.current) return;
+    mapRef.current.setDraggable(enabled);
+    mapRef.current.setZoomable(enabled);
+  }
+
   useEffect(() => {
     let disposed = false;
 
@@ -35,8 +85,8 @@ export function GuessMap({ guess, answer = null, interactive = false, onGuessCha
 
         kakaoRef.current = kakao;
         const map = new kakao.maps.Map(containerRef.current, {
-          center: new kakao.maps.LatLng(36.35, 127.75), // Center of Korea
-          level: 13, // Appropriate zoom for full country view
+          center: new kakao.maps.LatLng(36.35, 127.75),
+          level: 13,
         });
 
         mapRef.current = map;
@@ -54,26 +104,34 @@ export function GuessMap({ guess, answer = null, interactive = false, onGuessCha
           strokeColor: "#ffffff",
           strokeWeight: 2,
           strokeOpacity: 0.8,
-          strokeStyle: "dashed"
+          strokeStyle: "dashed",
         });
+        setMapReady(true);
       } catch (nextError) {
+        if (disposed) return;
         setError(nextError instanceof Error ? nextError.message : "Failed to initialize map.");
+        setMapReady(false);
       }
     }
 
     setError(null);
+    setMapReady(false);
     void mount();
 
     return () => {
       disposed = true;
-      if (clickListenerRef.current && kakaoRef.current) {
+      if (clickListenerRef.current && kakaoRef.current && mapRef.current) {
         kakaoRef.current.maps.event.removeListener(mapRef.current, "click", clickListenerRef.current);
         clickListenerRef.current = null;
       }
+      mapRef.current = null;
+      kakaoRef.current = null;
+      guessMarkerRef.current = null;
+      answerMarkerRef.current = null;
+      lineRef.current = null;
     };
   }, []);
 
-  // Set up interaction
   useEffect(() => {
     const kakao = kakaoRef.current;
     const map = mapRef.current;
@@ -85,16 +143,12 @@ export function GuessMap({ guess, answer = null, interactive = false, onGuessCha
       clickListenerRef.current = null;
     }
 
-    if (!interactive) {
-      // Disable map interactions if not interactive (e.g. showing result)
-      map.setDraggable(false);
-      map.setZoomable(false);
+    if (!mapReady || !interactive || isResizing) {
+      setMapInteractionEnabled(false);
       return;
     }
 
-    // Enable map interactions
-    map.setDraggable(true);
-    map.setZoomable(true);
+    setMapInteractionEnabled(true);
 
     clickListenerRef.current = (mouseEvent: any) => {
       const latlng = mouseEvent.latLng;
@@ -103,13 +157,15 @@ export function GuessMap({ guess, answer = null, interactive = false, onGuessCha
     };
 
     kakao.maps.event.addListener(map, "click", clickListenerRef.current);
-  }, [interactive]);
+  }, [interactive, isResizing, mapReady]);
 
-  // Handle map resizing effectively without flickering because CSS transitions are applied
   useEffect(() => {
     const resizeObserver = new ResizeObserver(() => {
-      if (mapRef.current) {
-        mapRef.current.relayout();
+      if (!mapRef.current) return;
+      const center = mapRef.current.getCenter?.();
+      mapRef.current.relayout();
+      if (center) {
+        mapRef.current.setCenter(center);
       }
     });
 
@@ -122,7 +178,6 @@ export function GuessMap({ guess, answer = null, interactive = false, onGuessCha
     };
   }, []);
 
-  // Update markers
   useEffect(() => {
     const map = mapRef.current;
     const kakao = kakaoRef.current;
@@ -157,8 +212,7 @@ export function GuessMap({ guess, answer = null, interactive = false, onGuessCha
         new kakao.maps.LatLng(answer.lat, answer.lng),
       ]);
       line.setMap(map);
-      
-      // Delay fitting bounds slightly to ensure resize has finished
+
       setTimeout(() => {
         if (mapRef.current) {
           mapRef.current.setBounds(bounds, 60, 60, 60, 60);
@@ -170,10 +224,127 @@ export function GuessMap({ guess, answer = null, interactive = false, onGuessCha
     }
   }, [guess, answer]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    const kakao = kakaoRef.current;
+
+    if (!mapReady || !map || !kakao) return;
+
+    map.setMapTypeId(kakao.maps.MapTypeId[baseMapType]);
+
+    if (terrainEnabled) {
+      map.addOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
+    } else {
+      map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TERRAIN);
+    }
+  }, [baseMapType, mapReady, terrainEnabled]);
+
+  const canResize = Boolean(onSizeChange);
+
+  function updateSize(clientX: number, clientY: number) {
+    const resizeState = resizeStateRef.current;
+    if (!resizeState || !onSizeChange) return;
+
+    const widthDeltaFromX = resizeState.startX - clientX;
+    const widthDeltaFromY = (resizeState.startY - clientY) * GUESS_MAP_ASPECT_RATIO;
+    const widthDelta =
+      Math.abs(widthDeltaFromX) > Math.abs(widthDeltaFromY) ? widthDeltaFromX : widthDeltaFromY;
+    const nextWidth = clamp(resizeState.startWidth + widthDelta, minSize.width, maxSize.width);
+
+    onSizeChange({
+      width: Math.round(nextWidth),
+      height: Math.round(nextWidth / GUESS_MAP_ASPECT_RATIO),
+    });
+  }
+
+  function endResize(target: HTMLButtonElement, pointerId: number) {
+    if (resizeStateRef.current?.pointerId != pointerId) return;
+    resizeStateRef.current = null;
+    setIsResizing(false);
+    if (target.hasPointerCapture(pointerId)) {
+      target.releasePointerCapture(pointerId);
+    }
+    if (interactive) {
+      setMapInteractionEnabled(true);
+    }
+  }
+
+  function handleResizePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!canResize) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    resizeStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: size.width,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsResizing(true);
+    setMapInteractionEnabled(false);
+  }
+
+  function handleResizePointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!canResize || resizeStateRef.current?.pointerId !== event.pointerId) return;
+
+    event.preventDefault();
+    updateSize(event.clientX, event.clientY);
+  }
+
+  function handleResizePointerUp(event: ReactPointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    endResize(event.currentTarget, event.pointerId);
+  }
+
+  function handleResizePointerCancel(event: ReactPointerEvent<HTMLButtonElement>) {
+    endResize(event.currentTarget, event.pointerId);
+  }
+
   return (
-    <>
+    <div
+      className={`guess-map-shell ${interactive ? "is-interactive" : "is-static"} ${isResizing ? "is-resizing" : ""}`}
+      style={{ width: `${size.width}px`, height: `${size.height}px` }}
+    >
+      <div className="guess-map-chrome">
+        <div className="guess-map-badge">추측 지도</div>
+        <div className="guess-map-maptype-controls" role="group" aria-label="지도 보기 선택">
+          {MAP_TYPE_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`guess-map-maptype-button ${baseMapType === option.id ? "is-active" : ""}`}
+              onClick={() => setBaseMapType(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className={`guess-map-maptype-button ${terrainEnabled ? "is-active" : ""}`}
+            onClick={() => setTerrainEnabled((current) => !current)}
+          >
+            지형
+          </button>
+        </div>
+        <div className="guess-map-hint">
+          {interactive ? "좌상단 핸들로 크기 조절" : "결과 지도를 보고 있습니다"}
+        </div>
+      </div>
+      {canResize ? (
+        <button
+          type="button"
+          className="guess-map-resize-handle"
+          aria-label="지도 크기 조절"
+          title="드래그해서 지도 크기 조절"
+          onPointerDown={handleResizePointerDown}
+          onPointerMove={handleResizePointerMove}
+          onPointerUp={handleResizePointerUp}
+          onPointerCancel={handleResizePointerCancel}
+        />
+      ) : null}
       <div className="guess-map-canvas" ref={containerRef} />
       {error ? <div className="panel-error">{error}</div> : null}
-    </>
+    </div>
   );
 }

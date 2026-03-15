@@ -6,6 +6,8 @@ export type LatLng = {
 export type PanoramaSeed = {
   panoId?: string;
   position: LatLng;
+  resolvedPanoId?: string | null;
+  resolvedPosition?: LatLng | null;
   initialPov?: {
     pan: number;
     tilt: number;
@@ -58,4 +60,3 @@ export type GameSession = {
   results: RoundResult[];
   startedAt: string;
 };
-

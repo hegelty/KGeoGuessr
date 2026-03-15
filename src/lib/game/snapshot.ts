@@ -5,13 +5,19 @@ function toPublicRound(session: GameSession, index: number): PublicRound | null 
 
   if (!round) return null;
 
+  const panorama = {
+    position: round.panorama.position,
+    panoId: round.panorama.panoId,
+    initialPov: round.panorama.initialPov,
+  };
+
   return {
     id: round.id,
     roundNumber: index + 1,
     totalRounds: session.rounds.length,
     name: round.name,
     region: round.region,
-    panorama: round.panorama,
+    panorama,
   };
 }
 
@@ -36,4 +42,3 @@ export function toGameSnapshot(session: GameSession): GameSnapshot {
     history: session.results,
   };
 }
-

@@ -43,7 +43,14 @@ export function useGameSession() {
         const created = await request<GameSnapshot>("/api/game/start", { method: "POST" });
         setSnapshot(created);
       } else if (state.ok) {
-        setSnapshot((await state.json()) as GameSnapshot);
+        const existing = (await state.json()) as GameSnapshot;
+
+        if (existing.totalRounds !== 1 || existing.status === "finished") {
+          const created = await request<GameSnapshot>("/api/game/start", { method: "POST" });
+          setSnapshot(created);
+        } else {
+          setSnapshot(existing);
+        }
       } else {
         const payload = (await state.json().catch(() => null)) as { message?: string } | null;
         throw new Error(payload?.message ?? "Failed to load game state.");
@@ -55,15 +62,20 @@ export function useGameSession() {
     }
   }
 
-  async function restart() {
+  async function restart(excludedRoundIds: string[] = []): Promise<GameSnapshot | null> {
     setSubmitting(true);
     setError(null);
 
     try {
-      const nextSnapshot = await request<GameSnapshot>("/api/game/start", { method: "POST" });
+      const nextSnapshot = await request<GameSnapshot>("/api/game/start", {
+        method: "POST",
+        body: JSON.stringify({ excludedRoundIds }),
+      });
       setSnapshot(nextSnapshot);
+      return nextSnapshot;
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Failed to restart game.");
+      return null;
     } finally {
       setSubmitting(false);
     }
@@ -86,19 +98,14 @@ export function useGameSession() {
     }
   }
 
-  async function goToNextRound() {
-    setSubmitting(true);
-    setError(null);
-
+  async function resolvePanorama(roundId: string, panoId: string, position: LatLng) {
     try {
-      const nextSnapshot = await request<GameSnapshot>("/api/game/next", {
+      await request<{ ok: true }>("/api/game/resolve", {
         method: "POST",
+        body: JSON.stringify({ roundId, panoId, position }),
       });
-      setSnapshot(nextSnapshot);
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Failed to load next round.");
-    } finally {
-      setSubmitting(false);
+    } catch {
+      // Best-effort sync only. Guess scoring still falls back to the seed position.
     }
   }
 
@@ -113,7 +120,7 @@ export function useGameSession() {
     error,
     restart,
     submitGuess,
-    goToNextRound,
+    resolvePanorama,
   };
 }
 
