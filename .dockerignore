@@ -1,0 +1,11 @@
+.devcontainer
+.git
+.gitignore
+.idea
+.next
+.env.local
+coverage
+node_modules
+npm-debug.log*
+implementation_plan.md
+tsconfig.tsbuildinfo
