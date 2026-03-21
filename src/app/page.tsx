@@ -37,6 +37,37 @@ export default function HomePage() {
           <h3>주소 공개</h3>
           <p>결과 화면에서만 Reverse Geocoding을 호출해 비용을 통제합니다.</p>
         </Card>
+        <Card className="developer-card">
+          <h3>개발자 정보</h3>
+          <div className="developer-credit-list">
+            <p>
+              <strong>기획 / 개발 / 디자인</strong>
+              <span>hegelty</span>
+            </p>
+            <p>
+              <strong>AI 딸깍</strong>
+              <span>임예찬</span>
+            </p>
+          </div>
+          <div className="developer-link-row">
+            <a
+              href="https://github.com/hegelty"
+              target="_blank"
+              rel="noreferrer"
+              className="developer-link"
+            >
+              GitHub
+            </a>
+            <a
+              href="https://hegelty.me"
+              target="_blank"
+              rel="noreferrer"
+              className="developer-link"
+            >
+              hegelty.me
+            </a>
+          </div>
+        </Card>
       </section>
     </main>
   );
