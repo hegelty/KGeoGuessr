@@ -18,8 +18,6 @@ function sanitizeRound(round: unknown): SeedRound | null {
 
   if (
     typeof candidate.id !== "string" ||
-    typeof candidate.name !== "string" ||
-    typeof candidate.region !== "string" ||
     !panorama ||
     !isLatLng(panorama.position)
   ) {
@@ -28,8 +26,6 @@ function sanitizeRound(round: unknown): SeedRound | null {
 
   return {
     id: candidate.id,
-    name: candidate.name,
-    region: candidate.region,
     panorama: {
       position: panorama.position,
       panoId: typeof panorama.panoId === "string" ? panorama.panoId : undefined,

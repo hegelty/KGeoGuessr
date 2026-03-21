@@ -81,8 +81,6 @@ function cloneSharedSession(session: GameSession): GameSession {
     currentGuess: null,
     rounds: session.rounds.map((round) => ({
       id: round.id,
-      name: round.name,
-      region: round.region,
       panorama: {
         position: { ...round.panorama.position },
         panoId: round.panorama.panoId,

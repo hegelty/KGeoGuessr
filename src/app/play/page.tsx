@@ -106,7 +106,6 @@ export default function PlayPage() {
   const [panoramaReady, setPanoramaReady] = useState(false);
   const [retryingPanorama, setRetryingPanorama] = useState(false);
   const [selectedTimeLimitSeconds, setSelectedTimeLimitSeconds] = useState<number | null>(null);
-  const failedRoundIdsRef = useRef<string[]>([]);
   const retryingPanoramaRef = useRef(false);
 
   const round = snapshot?.currentRound ?? null;
@@ -155,7 +154,7 @@ export default function PlayPage() {
       <main className="play-page">
         <div className="center-overlay glass-panel card">
           <p className="eyebrow">Loading</p>
-          <h2>세션 불러오는 중...</h2>
+          <h2>로드뷰 가능한 랜덤 장소를 찾는 중...</h2>
         </div>
       </main>
     );
@@ -220,7 +219,6 @@ export default function PlayPage() {
             setPanoramaReady(true);
             setRetryingPanorama(false);
             retryingPanoramaRef.current = false;
-            failedRoundIdsRef.current = [];
             void resolvePanorama(round.id, panoId, position);
           }}
           onInitialLocationUnavailable={() => {
@@ -231,13 +229,7 @@ export default function PlayPage() {
             setPanoramaReady(false);
             updateCurrentGuess(null);
 
-            const nextExcludedRoundIds = failedRoundIdsRef.current.includes(round.id)
-              ? failedRoundIdsRef.current
-              : [...failedRoundIdsRef.current, round.id];
-
-            failedRoundIdsRef.current = nextExcludedRoundIds;
-
-            void restart(nextExcludedRoundIds).finally(() => {
+            void restart().finally(() => {
               setRetryingPanorama(false);
               retryingPanoramaRef.current = false;
             });

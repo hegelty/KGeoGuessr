@@ -17,8 +17,6 @@ export type PanoramaSeed = {
 
 export type SeedRound = {
   id: string;
-  name: string;
-  region: string;
   panorama: PanoramaSeed;
 };
 
@@ -26,8 +24,6 @@ export type PublicRound = {
   id: string;
   roundNumber: number;
   totalRounds: number;
-  name: string;
-  region: string;
   panorama: PanoramaSeed;
 };
 

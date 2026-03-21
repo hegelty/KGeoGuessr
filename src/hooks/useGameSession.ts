@@ -26,15 +26,16 @@ import { isLatLng } from "@/lib/game/validators";
 import { toGameSnapshot } from "@/lib/game/snapshot";
 import type { GameSession, GameSnapshot, LatLng, RoundResult, ShareAction } from "@/types/game";
 
-function createSession(excludedRoundIds: string[] = []): GameSession {
+async function createSession(): Promise<GameSession> {
   const startedAt = new Date().toISOString();
+  const rounds = await selectRounds(1);
 
   return {
     sessionId: createId(),
     currentRoundIndex: 0,
     totalScore: 0,
     currentGuess: null,
-    rounds: selectRounds(1, excludedRoundIds),
+    rounds,
     results: [],
     startedAt,
     roundStartedAt: null,
@@ -113,43 +114,63 @@ export function useGameSession() {
   }, [shareMessage]);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
+    let cancelled = false;
 
-    try {
-      const sharedSessionResult = parseSharedSessionFromUrl(window.location.href);
-      let session = loadStoredSession();
+    async function initialize() {
+      setLoading(true);
+      setError(null);
 
-      if (sharedSessionResult.kind === "ready") {
-        session = sharedSessionResult.session;
-        window.history.replaceState(null, "", stripSharedSessionFromUrl(window.location.href));
-        setShareMessage("공유 링크에서 현재 게임을 불러왔습니다.");
-      } else if (sharedSessionResult.kind === "invalid") {
-        window.history.replaceState(null, "", stripSharedSessionFromUrl(window.location.href));
-        setShareMessage(sharedSessionResult.message);
+      try {
+        const sharedSessionResult = parseSharedSessionFromUrl(window.location.href);
+        let session = loadStoredSession();
+
+        if (sharedSessionResult.kind === "ready") {
+          session = sharedSessionResult.session;
+          window.history.replaceState(null, "", stripSharedSessionFromUrl(window.location.href));
+          setShareMessage("공유 링크에서 현재 게임을 불러왔습니다.");
+        } else if (sharedSessionResult.kind === "invalid") {
+          window.history.replaceState(null, "", stripSharedSessionFromUrl(window.location.href));
+          setShareMessage(sharedSessionResult.message);
+        }
+
+        if (!session || !hasActiveRound(session)) {
+          session = await createSession();
+        }
+
+        if (
+          canResolveCurrentRound(session) &&
+          hasTimeLimit(session.timeLimitSeconds) &&
+          getRemainingMs(session.roundStartedAt, session.timeLimitSeconds) === 0
+        ) {
+          finalizeCurrentRound(session, true);
+        }
+
+        saveStoredSession(session);
+        if (cancelled) {
+          return;
+        }
+
+        setSnapshot(toGameSnapshot(session));
+        setNow(Date.now());
+      } catch (nextError) {
+        if (cancelled) {
+          return;
+        }
+
+        setError(nextError instanceof Error ? nextError.message : "Failed to initialize game.");
+        setSnapshot(null);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-
-      if (!session || !hasActiveRound(session)) {
-        session = createSession();
-      }
-
-      if (
-        canResolveCurrentRound(session) &&
-        hasTimeLimit(session.timeLimitSeconds) &&
-        getRemainingMs(session.roundStartedAt, session.timeLimitSeconds) === 0
-      ) {
-        finalizeCurrentRound(session, true);
-      }
-
-      saveStoredSession(session);
-      setSnapshot(toGameSnapshot(session));
-      setNow(Date.now());
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Failed to initialize game.");
-      setSnapshot(null);
-    } finally {
-      setLoading(false);
     }
+
+    void initialize();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -180,12 +201,12 @@ export function useGameSession() {
     };
   }, [snapshot?.currentRound?.id, snapshot?.currentResult, snapshot?.roundStartedAt, snapshot?.timeLimitSeconds]);
 
-  async function restart(excludedRoundIds: string[] = []): Promise<GameSnapshot | null> {
+  async function restart(): Promise<GameSnapshot | null> {
     setSubmitting(true);
     setError(null);
 
     try {
-      const session = createSession(excludedRoundIds);
+      const session = await createSession();
       saveStoredSession(session);
       const nextSnapshot = toGameSnapshot(session);
       setSnapshot(nextSnapshot);

@@ -15,8 +15,6 @@ function toPublicRound(session: GameSession, index: number): PublicRound | null 
     id: round.id,
     roundNumber: index + 1,
     totalRounds: session.rounds.length,
-    name: round.name,
-    region: round.region,
     panorama,
   };
 }
