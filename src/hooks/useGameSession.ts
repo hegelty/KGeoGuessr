@@ -11,6 +11,13 @@ import {
   stripSharedSessionFromUrl,
 } from "@/lib/game/share";
 import {
+  formatElapsedMs,
+  formatTimeLimitSeconds,
+  getClampedElapsedMs,
+  getRemainingMs,
+  hasTimeLimit,
+} from "@/lib/game/timer";
+import {
   shareMapToKakaoTalk as sendMapShareToKakaoTalk,
   shareResultToKakaoTalk as sendResultShareToKakaoTalk,
 } from "@/lib/kakao/share";
@@ -20,14 +27,57 @@ import { toGameSnapshot } from "@/lib/game/snapshot";
 import type { GameSession, GameSnapshot, LatLng, RoundResult, ShareAction } from "@/types/game";
 
 function createSession(excludedRoundIds: string[] = []): GameSession {
+  const startedAt = new Date().toISOString();
+
   return {
     sessionId: createId(),
     currentRoundIndex: 0,
     totalScore: 0,
+    currentGuess: null,
     rounds: selectRounds(1, excludedRoundIds),
     results: [],
-    startedAt: new Date().toISOString(),
+    startedAt,
+    roundStartedAt: null,
+    timeLimitSeconds: null,
   };
+}
+
+function canResolveCurrentRound(session: GameSession) {
+  return (
+    session.currentRoundIndex < session.rounds.length && !session.results[session.currentRoundIndex]
+  );
+}
+
+function finalizeCurrentRound(session: GameSession, forceTimedOut = false) {
+  if (!canResolveCurrentRound(session)) {
+    throw new Error("Current round already submitted.");
+  }
+
+  const round = session.rounds[session.currentRoundIndex];
+  const answer = round.panorama.resolvedPosition ?? round.panorama.position;
+  const elapsedMs = getClampedElapsedMs(session.roundStartedAt, session.timeLimitSeconds);
+  const remainingMs = getRemainingMs(session.roundStartedAt, session.timeLimitSeconds);
+  const timedOut = hasTimeLimit(session.timeLimitSeconds) && (forceTimedOut || remainingMs === 0);
+  const guess = session.currentGuess;
+  const distanceKm = guess ? haversineDistanceKm(guess, answer) : null;
+  const score = calculateRoundScore(distanceKm, elapsedMs, session.timeLimitSeconds);
+
+  const result: RoundResult = {
+    roundId: round.id,
+    roundNumber: session.currentRoundIndex + 1,
+    guess,
+    answer,
+    distanceKm,
+    score,
+    elapsedMs,
+    timedOut,
+  };
+
+  session.results.push(result);
+  session.totalScore += score;
+  session.currentGuess = null;
+
+  return result;
 }
 
 export function useGameSession() {
@@ -37,8 +87,18 @@ export function useGameSession() {
   const [shareAction, setShareAction] = useState<ShareAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const sharing = shareAction !== null;
+  const currentElapsedMs = snapshot
+    ? snapshot.currentResult?.elapsedMs ??
+      getClampedElapsedMs(snapshot.roundStartedAt, snapshot.timeLimitSeconds, now)
+    : 0;
+  const remainingMs = snapshot?.currentResult
+    ? null
+    : snapshot
+      ? getRemainingMs(snapshot.roundStartedAt, snapshot.timeLimitSeconds, now)
+      : null;
 
   useEffect(() => {
     if (!shareMessage) return;
@@ -73,8 +133,17 @@ export function useGameSession() {
         session = createSession();
       }
 
+      if (
+        canResolveCurrentRound(session) &&
+        hasTimeLimit(session.timeLimitSeconds) &&
+        getRemainingMs(session.roundStartedAt, session.timeLimitSeconds) === 0
+      ) {
+        finalizeCurrentRound(session, true);
+      }
+
       saveStoredSession(session);
       setSnapshot(toGameSnapshot(session));
+      setNow(Date.now());
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Failed to initialize game.");
       setSnapshot(null);
@@ -82,6 +151,34 @@ export function useGameSession() {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!snapshot?.currentRound || snapshot.currentResult || !snapshot.roundStartedAt) {
+      return;
+    }
+
+    const syncNow = () => {
+      setNow(Date.now());
+    };
+
+    syncNow();
+
+    const intervalId = window.setInterval(syncNow, 250);
+    const nextRemainingMs = getRemainingMs(snapshot.roundStartedAt, snapshot.timeLimitSeconds);
+    const timeoutId =
+      nextRemainingMs === null
+        ? null
+        : window.setTimeout(() => {
+            void submitGuess(true);
+          }, nextRemainingMs + 25);
+
+    return () => {
+      window.clearInterval(intervalId);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [snapshot?.currentRound?.id, snapshot?.currentResult, snapshot?.roundStartedAt, snapshot?.timeLimitSeconds]);
 
   async function restart(excludedRoundIds: string[] = []): Promise<GameSnapshot | null> {
     setSubmitting(true);
@@ -92,6 +189,7 @@ export function useGameSession() {
       saveStoredSession(session);
       const nextSnapshot = toGameSnapshot(session);
       setSnapshot(nextSnapshot);
+      setNow(Date.now());
       return nextSnapshot;
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Failed to restart game.");
@@ -101,15 +199,53 @@ export function useGameSession() {
     }
   }
 
-  async function submitGuess(guess: LatLng) {
+  function startRound(timeLimitSeconds: number | null) {
+    setError(null);
+
+    try {
+      const session = loadStoredSession();
+      if (!session || !canResolveCurrentRound(session) || session.roundStartedAt) {
+        return;
+      }
+
+      session.currentGuess = null;
+      session.roundStartedAt = new Date().toISOString();
+      session.timeLimitSeconds = timeLimitSeconds;
+
+      saveStoredSession(session);
+      setSnapshot(toGameSnapshot(session));
+      setNow(Date.now());
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to start round.");
+    }
+  }
+
+  function updateCurrentGuess(guess: LatLng | null) {
+    setError(null);
+
+    try {
+      if (guess !== null && !isLatLng(guess)) {
+        throw new Error("Invalid guess coordinates.");
+      }
+
+      const session = loadStoredSession();
+      if (!session || !canResolveCurrentRound(session) || !session.roundStartedAt) {
+        return;
+      }
+
+      session.currentGuess = guess;
+      saveStoredSession(session);
+      setSnapshot(toGameSnapshot(session));
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Failed to update guess.");
+    }
+  }
+
+  async function submitGuess(forceTimedOut = false) {
     setSubmitting(true);
     setError(null);
 
     try {
-      if (!isLatLng(guess)) {
-        throw new Error("Invalid guess coordinates.");
-      }
-
       const session = loadStoredSession();
       if (!session) {
         throw new Error("No active game session.");
@@ -123,23 +259,18 @@ export function useGameSession() {
         throw new Error("Current round already submitted.");
       }
 
-      const round = session.rounds[session.currentRoundIndex];
-      const answer = round.panorama.resolvedPosition ?? round.panorama.position;
-      const distanceKm = haversineDistanceKm(guess, answer);
-      const score = calculateRoundScore(distanceKm);
+      if (!session.roundStartedAt) {
+        throw new Error("먼저 게임을 시작해 주세요.");
+      }
 
-      session.results.push({
-        roundId: round.id,
-        roundNumber: session.currentRoundIndex + 1,
-        guess,
-        answer,
-        distanceKm,
-        score,
-      });
-      session.totalScore += score;
+      if (!forceTimedOut && !session.currentGuess) {
+        throw new Error("지도에서 추측 위치를 먼저 선택해 주세요.");
+      }
 
+      finalizeCurrentRound(session, forceTimedOut);
       saveStoredSession(session);
       setSnapshot(toGameSnapshot(session));
+      setNow(Date.now());
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Failed to submit guess.");
     } finally {
@@ -213,14 +344,17 @@ export function useGameSession() {
     setShareMessage(null);
 
     try {
-      const { sharePath, shareUrl } = getShareContext();
+      const { session, sharePath, shareUrl } = getShareContext();
+      const timeLimitDescription = hasTimeLimit(session.timeLimitSeconds)
+        ? `제한 시간은 ${formatTimeLimitSeconds(session.timeLimitSeconds)}이고, `
+        : "제한 시간 없이 ";
 
       await sendMapShareToKakaoTalk({
         sharePath,
         shareUrl,
         title: "KGeoGuessr 같이 한 판 할래?",
         contents:
-          "카카오 로드뷰를 보고 대한민국 어디인지 맞히는 랜덤 한 판 게임이에요. 같은 맵으로 바로 들어와서 같이 맞혀보세요.",
+          `카카오 로드뷰를 보고 대한민국 어디인지 맞히는 랜덤 한 판 게임이에요. ${timeLimitDescription}같은 맵으로 바로 들어와서 같이 맞혀볼 수 있어요.`,
       });
       setShareMessage("카카오톡 공유 창을 열었습니다.");
       return shareUrl;
@@ -239,13 +373,18 @@ export function useGameSession() {
     try {
       const { sharePath, shareUrl, session } = getShareContext();
       const totalScoreText = `${session.totalScore.toLocaleString()}점`;
-      const distanceText = `${result.distanceKm.toFixed(2)}km`;
+      const elapsedText = formatElapsedMs(result.elapsedMs);
+      const performanceText =
+        result.distanceKm === null
+          ? `${totalScoreText}, 걸린 시간 ${elapsedText}이었고 추측을 남기지 못했어요`
+          : `${totalScoreText}, 걸린 시간 ${elapsedText}, 오차 ${result.distanceKm.toFixed(2)}km였어요`;
+      const timeoutText = result.timedOut ? " 시간 초과로 자동 제출되었고, " : " ";
 
       await sendResultShareToKakaoTalk({
         sharePath,
         shareUrl,
         title: `KGeoGuessr 결과: ${totalScoreText}`,
-        contents: `이번 기록은 ${totalScoreText}, 오차 ${distanceText}였어요. 같은 맵을 바로 열어서 도전해보세요.`,
+        contents: `이번 기록은 ${performanceText}.${timeoutText}같은 맵을 바로 열어서 도전해보세요.`,
       });
       setShareMessage("카카오톡 결과 공유 창을 열었습니다.");
       return shareUrl;
@@ -265,7 +404,12 @@ export function useGameSession() {
     shareAction,
     error,
     shareMessage,
+    currentElapsedMs,
+    remainingMs,
+    timeLimitSeconds: snapshot?.timeLimitSeconds ?? null,
     restart,
+    startRound,
+    updateCurrentGuess,
     submitGuess,
     resolvePanorama,
     copyShareLink,

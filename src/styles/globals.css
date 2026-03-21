@@ -330,6 +330,18 @@ button {
   border: var(--glass-border);
 }
 
+.time-limit-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin: 1.25rem 0 1.5rem;
+}
+
+.time-limit-option {
+  min-width: 6.5rem;
+}
+
 .share-menu {
   position: relative;
   display: inline-flex;
@@ -623,6 +635,7 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
+  min-width: 5.5rem;
 }
 
 .hud-copy {
@@ -663,6 +676,10 @@ button {
   font-size: 1.4rem;
   font-weight: 800;
   margin: 0;
+}
+
+.hud-value-warning {
+  color: #ffd166;
 }
 
 /* 
@@ -783,6 +800,19 @@ button {
     gap: 1rem;
     padding: 0.9rem 1.15rem;
     flex-wrap: wrap;
+  }
+
+  .hud-item {
+    min-width: 4.5rem;
+  }
+
+  .time-limit-selector {
+    gap: 0.55rem;
+  }
+
+  .time-limit-option {
+    flex: 1 1 calc(50% - 0.55rem);
+    min-width: 0;
   }
 
   .hud-copy {

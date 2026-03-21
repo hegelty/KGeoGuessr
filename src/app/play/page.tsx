@@ -11,7 +11,7 @@ import { ResultPanel } from "@/components/game/ResultPanel";
 import { RoundHud } from "@/components/game/RoundHud";
 import { Button } from "@/components/ui/Button";
 import { useGameSession } from "@/hooks/useGameSession";
-import type { LatLng } from "@/types/game";
+import { ROUND_TIME_LIMIT_OPTIONS } from "@/lib/game/timer";
 
 type MapSizeBounds = {
   min: GuessMapSize;
@@ -88,26 +88,32 @@ export default function PlayPage() {
     shareAction,
     error,
     shareMessage,
+    currentElapsedMs,
+    remainingMs,
+    timeLimitSeconds,
     restart,
+    startRound,
+    updateCurrentGuess,
     submitGuess,
     resolvePanorama,
     copyShareLink,
     shareGameToKakaoTalk,
     shareResultToKakaoTalk,
   } = useGameSession();
-  const [guess, setGuess] = useState<LatLng | null>(null);
-  const [dismissedRule, setDismissedRule] = useState(false);
   const [mapSizeBounds, setMapSizeBounds] = useState<MapSizeBounds>(FALLBACK_MAP_BOUNDS);
   const [mapSize, setMapSize] = useState<GuessMapSize>(FALLBACK_COLLAPSED_MAP_SIZE);
   const [restoredMapSize, setRestoredMapSize] = useState<GuessMapSize>(FALLBACK_DEFAULT_MAP_SIZE);
   const [panoramaReady, setPanoramaReady] = useState(false);
   const [retryingPanorama, setRetryingPanorama] = useState(false);
+  const [selectedTimeLimitSeconds, setSelectedTimeLimitSeconds] = useState<number | null>(null);
   const failedRoundIdsRef = useRef<string[]>([]);
   const retryingPanoramaRef = useRef(false);
 
   const round = snapshot?.currentRound ?? null;
   const result = snapshot?.currentResult ?? null;
   const finished = snapshot?.status === "finished";
+  const guess = snapshot?.currentGuess ?? null;
+  const roundHasStarted = snapshot?.roundStartedAt != null;
   const interactiveGuess = result ? result.guess : guess;
 
   useEffect(() => {
@@ -135,12 +141,14 @@ export default function PlayPage() {
   }, []);
 
   useEffect(() => {
-    setGuess(result?.guess ?? null);
-    setDismissedRule(Boolean(result));
     setPanoramaReady(Boolean(result));
     setRetryingPanorama(false);
     retryingPanoramaRef.current = false;
   }, [round?.id, result]);
+
+  useEffect(() => {
+    setSelectedTimeLimitSeconds(snapshot?.timeLimitSeconds ?? null);
+  }, [round?.id, snapshot?.timeLimitSeconds]);
 
   if (loading) {
     return (
@@ -221,8 +229,7 @@ export default function PlayPage() {
             retryingPanoramaRef.current = true;
             setRetryingPanorama(true);
             setPanoramaReady(false);
-            setGuess(null);
-            setDismissedRule(true);
+            updateCurrentGuess(null);
 
             const nextExcludedRoundIds = failedRoundIdsRef.current.includes(round.id)
               ? failedRoundIdsRef.current
@@ -243,16 +250,19 @@ export default function PlayPage() {
           <div className="ui-element-interactive">
             <RoundHud
               totalScore={snapshot.totalScore}
+              elapsedMs={currentElapsedMs}
+              remainingMs={remainingMs}
+              timeLimitSeconds={timeLimitSeconds}
+              roundStarted={roundHasStarted}
               panoramaReady={panoramaReady}
               hasGuess={Boolean(guess)}
-              canSubmit={!result && Boolean(guess) && panoramaReady}
+              canSubmit={!result && roundHasStarted && Boolean(guess) && panoramaReady}
               submitting={submitting}
               sharing={sharing}
               shareAction={shareAction}
               shareMessage={shareMessage}
               onSubmit={() => {
-                if (!guess) return;
-                void submitGuess(guess);
+                void submitGuess();
               }}
               onShareCopyLink={() => {
                 void copyShareLink();
@@ -264,22 +274,51 @@ export default function PlayPage() {
           </div>
         </div>
 
-        {!result && !guess && !dismissedRule ? (
+        {!result && !roundHasStarted ? (
           <div
             className="center-overlay glass-panel card"
             style={{ pointerEvents: "auto", textAlign: "center" }}
           >
             <p className="eyebrow">Game Rule</p>
             <h3>랜덤 위치 한 판 시작!</h3>
+            <div className="time-limit-selector">
+              <Button
+                className={selectedTimeLimitSeconds === null ? "button-secondary time-limit-option" : "button-ghost time-limit-option"}
+                onClick={() => setSelectedTimeLimitSeconds(null)}
+                type="button"
+              >
+                제한 없음
+              </Button>
+              {ROUND_TIME_LIMIT_OPTIONS.map((optionSeconds) => (
+                <Button
+                  key={optionSeconds}
+                  className={
+                    selectedTimeLimitSeconds === optionSeconds
+                      ? "button-secondary time-limit-option"
+                      : "button-ghost time-limit-option"
+                  }
+                  onClick={() => setSelectedTimeLimitSeconds(optionSeconds)}
+                  type="button"
+                >
+                  {`${optionSeconds / 60}분`}
+                </Button>
+              ))}
+            </div>
             <p className="muted-text" style={{ marginBottom: "2rem" }}>
               배경의 로드뷰를 이리저리 드래그하며 단서를 찾아보세요.
               <br />
+              시작 전에 제한 시간을 고를 수 있고, <strong>선택하지 않으면 제한 없이 진행됩니다.</strong>
+              <br />
               위치를 알아냈다면, <strong>우측 하단의 지도</strong>를 클릭해서 추측 위치를 찍어주세요.
               <br />
-              실제 로드뷰가 찍힌 시작 좌표를 기준으로 점수를 계산합니다.
+              걸린 시간은 항상 기록되지만, 시간 점수와 자동 제출은 제한 시간을 선택했을 때만 적용됩니다.
             </p>
-            <Button className="button-primary button-block" onClick={() => setDismissedRule(true)}>
-              확인했습니다 (로드뷰 보기)
+            <Button
+              className="button-primary button-block"
+              onClick={() => startRound(selectedTimeLimitSeconds)}
+              disabled={!panoramaReady || submitting}
+            >
+              {!panoramaReady ? "로드뷰 준비 중..." : "이 설정으로 시작"}
             </Button>
           </div>
         ) : null}
@@ -321,7 +360,6 @@ export default function PlayPage() {
                   void shareResultToKakaoTalk(result);
                 }}
                 onNext={() => {
-                  setGuess(null);
                   setPanoramaReady(false);
                   void restart();
                 }}
@@ -334,8 +372,8 @@ export default function PlayPage() {
               <GuessMap
                 guess={interactiveGuess}
                 answer={result?.answer}
-                interactive={!result}
-                onGuessChange={(nextGuess) => setGuess(nextGuess)}
+                interactive={!result && roundHasStarted}
+                onGuessChange={(nextGuess) => updateCurrentGuess(nextGuess)}
                 size={mapSize}
                 collapsedSize={mapSizeBounds.collapsedSize}
                 restoredSize={restoredMapSize}

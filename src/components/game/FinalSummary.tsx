@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/Button";
+import { formatElapsedMs } from "@/lib/game/timer";
 import type { RoundResult } from "@/types/game";
 
 type Props = {
@@ -8,8 +9,12 @@ type Props = {
   onRestart: () => void;
 };
 
+function hasDistance(result: RoundResult): result is RoundResult & { distanceKm: number } {
+  return typeof result.distanceKm === "number" && Number.isFinite(result.distanceKm);
+}
+
 export function FinalSummary({ totalScore, history, restarting, onRestart }: Props) {
-  const safeHistory = history.filter((result) => Number.isFinite(result.distanceKm));
+  const safeHistory = history.filter(hasDistance);
   const averageDistance =
     safeHistory.length === 0
       ? 0
@@ -28,7 +33,9 @@ export function FinalSummary({ totalScore, history, restarting, onRestart }: Pro
           <div key={result.roundId} className="history-row" style={{ display: "flex", justifyContent: "space-between", padding: "1rem 1.5rem", background: "rgba(255,255,255,0.05)", border: "none", borderBottom: "1px solid var(--line)", borderRadius: 0 }}>
             <span style={{ fontWeight: 800, color: "var(--muted)" }}>Round {result.roundNumber}</span>
             <span style={{ fontWeight: 700, color: "var(--secondary)" }}>+{result.score.toLocaleString()}점</span>
-            <span style={{ color: "var(--muted)" }}>{result.distanceKm.toFixed(1)} km</span>
+            <span style={{ color: "var(--muted)" }}>
+              {result.distanceKm.toFixed(1)} km / {formatElapsedMs(result.elapsedMs)}
+            </span>
           </div>
         ))}
       </div>

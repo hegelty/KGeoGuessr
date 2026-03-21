@@ -78,6 +78,7 @@ function cloneSharedSession(session: GameSession): GameSession {
     sessionId: session.sessionId,
     currentRoundIndex: 0,
     totalScore: 0,
+    currentGuess: null,
     rounds: session.rounds.map((round) => ({
       id: round.id,
       name: round.name,
@@ -92,6 +93,8 @@ function cloneSharedSession(session: GameSession): GameSession {
     })),
     results: [],
     startedAt: new Date().toISOString(),
+    roundStartedAt: null,
+    timeLimitSeconds: session.timeLimitSeconds,
   };
 }
 

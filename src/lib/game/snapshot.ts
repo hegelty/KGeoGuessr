@@ -37,8 +37,11 @@ export function toGameSnapshot(session: GameSession): GameSnapshot {
     currentRoundIndex: session.currentRoundIndex,
     totalRounds: session.rounds.length,
     totalScore: session.totalScore,
+    currentGuess: session.currentGuess,
     currentRound: finished ? null : toPublicRound(session, session.currentRoundIndex),
     currentResult: finished ? null : currentResult(session),
     history: session.results,
+    roundStartedAt: session.roundStartedAt,
+    timeLimitSeconds: session.timeLimitSeconds,
   };
 }

@@ -58,9 +58,9 @@ function sanitizeResult(result: unknown): RoundResult | null {
   if (
     typeof candidate.roundId !== "string" ||
     !isFiniteNumber(candidate.roundNumber) ||
-    !isLatLng(candidate.guess) ||
+    (candidate.guess !== null && !isLatLng(candidate.guess)) ||
     !isLatLng(candidate.answer) ||
-    !isFiniteNumber(candidate.distanceKm) ||
+    (candidate.distanceKm !== null && !isFiniteNumber(candidate.distanceKm)) ||
     !isFiniteNumber(candidate.score)
   ) {
     return null;
@@ -69,10 +69,12 @@ function sanitizeResult(result: unknown): RoundResult | null {
   return {
     roundId: candidate.roundId,
     roundNumber: candidate.roundNumber,
-    guess: candidate.guess,
+    guess: candidate.guess === null ? null : candidate.guess,
     answer: candidate.answer,
-    distanceKm: candidate.distanceKm,
+    distanceKm: candidate.distanceKm === null ? null : candidate.distanceKm,
     score: candidate.score,
+    elapsedMs: isFiniteNumber(candidate.elapsedMs) ? candidate.elapsedMs : 0,
+    timedOut: candidate.timedOut === true,
   };
 }
 
@@ -99,14 +101,27 @@ export function sanitizeSession(value: unknown): GameSession | null {
     : [];
   const maxRoundIndex = rounds.length - 1;
   const currentRoundIndex = Math.max(0, Math.min(candidate.currentRoundIndex, maxRoundIndex));
+  const hasRoundStartedAt = Object.prototype.hasOwnProperty.call(candidate, "roundStartedAt");
+  const hasTimeLimitSeconds = Object.prototype.hasOwnProperty.call(candidate, "timeLimitSeconds");
 
   return {
     sessionId: candidate.sessionId,
     currentRoundIndex,
     totalScore: candidate.totalScore,
+    currentGuess: isLatLng(candidate.currentGuess) ? candidate.currentGuess : null,
     rounds,
     results: results.slice(0, rounds.length),
     startedAt: candidate.startedAt,
+    roundStartedAt:
+      hasRoundStartedAt
+        ? typeof candidate.roundStartedAt === "string"
+          ? candidate.roundStartedAt
+          : null
+        : candidate.startedAt,
+    timeLimitSeconds:
+      hasTimeLimitSeconds && isFiniteNumber(candidate.timeLimitSeconds) && candidate.timeLimitSeconds > 0
+        ? candidate.timeLimitSeconds
+        : null,
   };
 }
 

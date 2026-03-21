@@ -55,13 +55,18 @@ function parseSession(value: string): GameSession | null {
 }
 
 export function createSession(rounds: GameSession["rounds"]): GameSession {
+  const startedAt = new Date().toISOString();
+
   return {
     sessionId: randomUUID(),
     currentRoundIndex: 0,
     totalScore: 0,
+    currentGuess: null,
     rounds,
     results: [],
-    startedAt: new Date().toISOString(),
+    startedAt,
+    roundStartedAt: null,
+    timeLimitSeconds: null,
   };
 }
 
@@ -93,4 +98,3 @@ export async function clearSession() {
     maxAge: 0,
   });
 }
-

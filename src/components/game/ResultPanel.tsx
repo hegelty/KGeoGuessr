@@ -2,6 +2,7 @@
 
 import { ShareMenu } from "@/components/game/ShareMenu";
 import { Button } from "@/components/ui/Button";
+import { formatElapsedMs } from "@/lib/game/timer";
 import { isLatLng } from "@/lib/game/validators";
 import { useReverseGeocodeCache } from "@/hooks/useReverseGeocodeCache";
 import type { RoundResult, ShareAction } from "@/types/game";
@@ -28,7 +29,9 @@ export function ResultPanel({
   onNext,
 }: Props) {
   const hasValidAnswer = isLatLng(result.answer);
-  const hasValidDistance = Number.isFinite(result.distanceKm);
+  const hasValidDistance = typeof result.distanceKm === "number" && Number.isFinite(result.distanceKm);
+  const distanceText =
+    hasValidDistance && result.distanceKm !== null ? `${result.distanceKm.toFixed(2)} km` : "결과 없음";
   const { address, loading, error } = useReverseGeocodeCache(hasValidAnswer ? result.answer : null);
 
   return (
@@ -39,11 +42,20 @@ export function ResultPanel({
       <div className="result-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
         <div>
           <span className="result-label">오차 거리</span>
-          <strong style={{ fontSize: "1.2rem", display: "block" }}>
-            {hasValidDistance ? `${result.distanceKm.toFixed(2)} km` : "결과 없음"}
-          </strong>
+          <strong style={{ fontSize: "1.2rem", display: "block" }}>{distanceText}</strong>
         </div>
         <div>
+          <span className="result-label">걸린 시간</span>
+          <strong style={{ fontSize: "1.2rem", display: "block" }}>
+            {formatElapsedMs(result.elapsedMs)}
+          </strong>
+          {result.timedOut ? (
+            <p className="muted-text" style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>
+              제한 시간 종료로 자동 제출됨
+            </p>
+          ) : null}
+        </div>
+        <div style={{ gridColumn: "1 / -1" }}>
           <span className="result-label">실제 로드뷰 좌표</span>
           <strong style={{ fontSize: "0.9rem", display: "block" }}>
             {hasValidAnswer
@@ -58,7 +70,11 @@ export function ResultPanel({
         <strong style={{ fontSize: "1.1rem" }}>
           {loading ? "조회 중..." : address ?? "결과없음"}
         </strong>
-        {error ? <p className="muted-text" style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>{error}</p> : null}
+        {error ? (
+          <p className="muted-text" style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>
+            {error}
+          </p>
+        ) : null}
       </div>
 
       <ShareMenu
