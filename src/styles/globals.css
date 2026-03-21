@@ -570,6 +570,24 @@ button {
   line-height: 1.45;
 }
 
+.hud-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.hud-share-feedback {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  text-align: right;
+  max-width: 24ch;
+}
+
 .hud-label {
   font-size: 0.75rem;
   color: var(--muted);
@@ -708,5 +726,17 @@ button {
     max-width: none;
     width: 100%;
     order: 10;
+  }
+
+  .hud-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+
+  .hud-share-feedback {
+    max-width: none;
+    width: 100%;
+    text-align: left;
   }
 }

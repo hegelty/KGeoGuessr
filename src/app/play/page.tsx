@@ -80,8 +80,18 @@ function getMapSizeBounds(viewportWidth: number, viewportHeight: number): MapSiz
 }
 
 export default function PlayPage() {
-  const { snapshot, loading, submitting, error, restart, submitGuess, resolvePanorama } =
-    useGameSession();
+  const {
+    snapshot,
+    loading,
+    submitting,
+    sharing,
+    error,
+    shareMessage,
+    restart,
+    submitGuess,
+    resolvePanorama,
+    shareCurrentGame,
+  } = useGameSession();
   const [guess, setGuess] = useState<LatLng | null>(null);
   const [dismissedRule, setDismissedRule] = useState(false);
   const [mapSizeBounds, setMapSizeBounds] = useState<MapSizeBounds>(FALLBACK_MAP_BOUNDS);
@@ -234,9 +244,14 @@ export default function PlayPage() {
               hasGuess={Boolean(guess)}
               canSubmit={!result && Boolean(guess) && panoramaReady}
               submitting={submitting}
+              sharing={sharing}
+              shareMessage={shareMessage}
               onSubmit={() => {
                 if (!guess) return;
                 void submitGuess(guess);
+              }}
+              onShare={() => {
+                void shareCurrentGame();
               }}
             />
           </div>

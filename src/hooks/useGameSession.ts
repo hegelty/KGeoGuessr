@@ -5,11 +5,15 @@ import { createId } from "@/lib/game/createId";
 import { haversineDistanceKm } from "@/lib/game/distance";
 import { selectRounds } from "@/lib/game/roundSelector";
 import { calculateRoundScore } from "@/lib/game/score";
+import {
+  buildSharedSessionUrl,
+  parseSharedSessionFromUrl,
+  stripSharedSessionFromUrl,
+} from "@/lib/game/share";
+import { hasActiveRound, loadStoredSession, saveStoredSession } from "@/lib/game/sessionState";
 import { isLatLng } from "@/lib/game/validators";
 import { toGameSnapshot } from "@/lib/game/snapshot";
-import type { GameSession, GameSnapshot, LatLng, RoundResult, SeedRound } from "@/types/game";
-
-const STORAGE_KEY = "kgeoguessr_session";
+import type { GameSession, GameSnapshot, LatLng } from "@/types/game";
 
 function createSession(excludedRoundIds: string[] = []): GameSession {
   return {
@@ -22,146 +26,48 @@ function createSession(excludedRoundIds: string[] = []): GameSession {
   };
 }
 
-function saveSession(session: GameSession) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function sanitizeRound(round: unknown): SeedRound | null {
-  if (!round || typeof round !== "object") return null;
-
-  const candidate = round as Record<string, unknown>;
-  const panorama =
-    candidate.panorama && typeof candidate.panorama === "object"
-      ? (candidate.panorama as Record<string, unknown>)
-      : null;
-
-  if (
-    typeof candidate.id !== "string" ||
-    typeof candidate.name !== "string" ||
-    typeof candidate.region !== "string" ||
-    !panorama ||
-    !isLatLng(panorama.position)
-  ) {
-    return null;
-  }
-
-  return {
-    id: candidate.id,
-    name: candidate.name,
-    region: candidate.region,
-    panorama: {
-      position: panorama.position,
-      panoId: typeof panorama.panoId === "string" ? panorama.panoId : undefined,
-      resolvedPanoId: typeof panorama.resolvedPanoId === "string" ? panorama.resolvedPanoId : null,
-      resolvedPosition: isLatLng(panorama.resolvedPosition) ? panorama.resolvedPosition : null,
-      initialPov:
-        panorama.initialPov &&
-        typeof panorama.initialPov === "object" &&
-        isFiniteNumber((panorama.initialPov as Record<string, unknown>).pan) &&
-        isFiniteNumber((panorama.initialPov as Record<string, unknown>).tilt) &&
-        isFiniteNumber((panorama.initialPov as Record<string, unknown>).fov)
-          ? {
-              pan: (panorama.initialPov as Record<string, number>).pan,
-              tilt: (panorama.initialPov as Record<string, number>).tilt,
-              fov: (panorama.initialPov as Record<string, number>).fov,
-            }
-          : undefined,
-    },
-  };
-}
-
-function sanitizeResult(result: unknown): RoundResult | null {
-  if (!result || typeof result !== "object") return null;
-
-  const candidate = result as Record<string, unknown>;
-  if (
-    typeof candidate.roundId !== "string" ||
-    !isFiniteNumber(candidate.roundNumber) ||
-    !isLatLng(candidate.guess) ||
-    !isLatLng(candidate.answer) ||
-    !isFiniteNumber(candidate.distanceKm) ||
-    !isFiniteNumber(candidate.score)
-  ) {
-    return null;
-  }
-
-  return {
-    roundId: candidate.roundId,
-    roundNumber: candidate.roundNumber,
-    guess: candidate.guess,
-    answer: candidate.answer,
-    distanceKm: candidate.distanceKm,
-    score: candidate.score,
-  };
-}
-
-function sanitizeSession(value: unknown): GameSession | null {
-  if (!value || typeof value !== "object") return null;
-
-  const candidate = value as Record<string, unknown>;
-  const rounds = Array.isArray(candidate.rounds)
-    ? candidate.rounds.map(sanitizeRound).filter((round): round is SeedRound => round !== null)
-    : [];
-
-  if (
-    typeof candidate.sessionId !== "string" ||
-    !isFiniteNumber(candidate.currentRoundIndex) ||
-    !isFiniteNumber(candidate.totalScore) ||
-    typeof candidate.startedAt !== "string" ||
-    rounds.length === 0
-  ) {
-    return null;
-  }
-
-  const results = Array.isArray(candidate.results)
-    ? candidate.results.map(sanitizeResult).filter((result): result is RoundResult => result !== null)
-    : [];
-  const maxRoundIndex = rounds.length - 1;
-  const currentRoundIndex = Math.max(0, Math.min(candidate.currentRoundIndex, maxRoundIndex));
-
-  return {
-    sessionId: candidate.sessionId,
-    currentRoundIndex,
-    totalScore: candidate.totalScore,
-    rounds,
-    results: results.slice(0, rounds.length),
-    startedAt: candidate.startedAt,
-  };
-}
-
-function loadSession(): GameSession | null {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
-
-  try {
-    return sanitizeSession(JSON.parse(raw));
-  } catch {
-    return null;
-  }
-}
-
 export function useGameSession() {
   const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!shareMessage) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setShareMessage(null);
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [shareMessage]);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
 
     try {
-      const existing = loadSession();
-      const session =
-        existing && existing.rounds.length === 1 && existing.currentRoundIndex < existing.rounds.length
-          ? existing
-          : createSession();
+      const sharedSessionResult = parseSharedSessionFromUrl(window.location.href);
+      let session = loadStoredSession();
 
-      saveSession(session);
+      if (sharedSessionResult.kind === "ready") {
+        session = sharedSessionResult.session;
+        window.history.replaceState(null, "", stripSharedSessionFromUrl(window.location.href));
+        setShareMessage("공유 링크에서 현재 게임을 불러왔습니다.");
+      } else if (sharedSessionResult.kind === "invalid") {
+        window.history.replaceState(null, "", stripSharedSessionFromUrl(window.location.href));
+        setShareMessage(sharedSessionResult.message);
+      }
+
+      if (!session || !hasActiveRound(session)) {
+        session = createSession();
+      }
+
+      saveStoredSession(session);
       setSnapshot(toGameSnapshot(session));
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Failed to initialize game.");
@@ -177,7 +83,7 @@ export function useGameSession() {
 
     try {
       const session = createSession(excludedRoundIds);
-      saveSession(session);
+      saveStoredSession(session);
       const nextSnapshot = toGameSnapshot(session);
       setSnapshot(nextSnapshot);
       return nextSnapshot;
@@ -198,7 +104,7 @@ export function useGameSession() {
         throw new Error("Invalid guess coordinates.");
       }
 
-      const session = loadSession();
+      const session = loadStoredSession();
       if (!session) {
         throw new Error("No active game session.");
       }
@@ -226,7 +132,7 @@ export function useGameSession() {
       });
       session.totalScore += score;
 
-      saveSession(session);
+      saveStoredSession(session);
       setSnapshot(toGameSnapshot(session));
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Failed to submit guess.");
@@ -237,7 +143,7 @@ export function useGameSession() {
 
   async function resolvePanorama(roundId: string, panoId: string, position: LatLng) {
     try {
-      const session = loadSession();
+      const session = loadStoredSession();
       if (!session || session.currentRoundIndex >= session.rounds.length) return;
 
       const round = session.rounds[session.currentRoundIndex];
@@ -246,9 +152,59 @@ export function useGameSession() {
       round.panorama.resolvedPanoId = panoId;
       round.panorama.resolvedPosition = position;
 
-      saveSession(session);
+      saveStoredSession(session);
     } catch {
       // Best-effort sync only. Guess scoring still falls back to the seed position.
+    }
+  }
+
+  async function shareCurrentGame() {
+    setSharing(true);
+    setShareMessage(null);
+
+    try {
+      const session = loadStoredSession();
+
+      if (!session || !hasActiveRound(session)) {
+        throw new Error("공유할 진행 중 게임이 없습니다.");
+      }
+
+      const shareUrl = buildSharedSessionUrl(session, window.location.href);
+
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          setShareMessage("공유 링크를 클립보드에 복사했습니다.");
+          return shareUrl;
+        } catch {
+          // Fall through to other sharing options below.
+        }
+      }
+
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: "KGeoGuessr",
+            text: "현재 진행 중인 KGeoGuessr 게임입니다.",
+            url: shareUrl,
+          });
+          setShareMessage("공유 시트를 열었습니다.");
+          return shareUrl;
+        } catch (shareError) {
+          if (shareError instanceof DOMException && shareError.name === "AbortError") {
+            return null;
+          }
+        }
+      }
+
+      window.prompt("이 링크를 복사해 공유하세요.", shareUrl);
+      setShareMessage("공유 링크를 표시했습니다.");
+      return shareUrl;
+    } catch (nextError) {
+      setShareMessage(nextError instanceof Error ? nextError.message : "공유 링크를 만들지 못했습니다.");
+      return null;
+    } finally {
+      setSharing(false);
     }
   }
 
@@ -256,9 +212,12 @@ export function useGameSession() {
     snapshot,
     loading,
     submitting,
+    sharing,
     error,
+    shareMessage,
     restart,
     submitGuess,
     resolvePanorama,
+    shareCurrentGame,
   };
 }

@@ -4,18 +4,24 @@ type Props = {
   totalScore: number;
   canSubmit: boolean;
   submitting: boolean;
+  sharing: boolean;
   panoramaReady: boolean;
   hasGuess: boolean;
+  shareMessage: string | null;
   onSubmit: () => void;
+  onShare: () => void;
 };
 
 export function RoundHud({
   totalScore,
   canSubmit,
   submitting,
+  sharing,
   panoramaReady,
   hasGuess,
+  shareMessage,
   onSubmit,
+  onShare,
 }: Props) {
   const helperText = !panoramaReady
     ? "로드뷰 실제 위치를 확인하는 중입니다."
@@ -34,11 +40,15 @@ export function RoundHud({
         <span className="hud-value">{totalScore.toLocaleString()}</span>
       </div>
       <p className="hud-copy">{helperText}</p>
-      <div style={{ marginLeft: "auto" }}>
+      <div className="hud-actions">
+        <Button className="button-secondary" onClick={onShare} disabled={sharing}>
+          {sharing ? "링크 준비 중..." : "게임 공유"}
+        </Button>
         <Button className="button-primary" onClick={onSubmit} disabled={!canSubmit || submitting}>
           {submitting ? "제출 중..." : "추측 제출"}
         </Button>
       </div>
+      {shareMessage ? <p className="hud-share-feedback">{shareMessage}</p> : null}
     </div>
   );
 }
