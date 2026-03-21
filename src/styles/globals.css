@@ -279,12 +279,12 @@ button {
   border-radius: 50%;
   border: 3px solid white;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  transform: translate(-50%, -50%); /* Center pin exactly on lat/lng coordinate */
+  transform-origin: center center;
   transition: transform 0.2s ease;
 }
 
 .map-pin:hover {
-  transform: translate(-50%, -50%) scale(1.15);
+  transform: scale(1.15);
 }
 
 .map-pin-guess {
@@ -325,11 +325,13 @@ button {
   overflow: hidden;
   border-radius: calc(var(--radius-lg) - 2px);
   background: linear-gradient(180deg, rgba(16, 16, 16, 0.18), rgba(8, 8, 8, 0.42));
+  transition: width 0.18s ease, height 0.18s ease;
 }
 
 .guess-map-shell.is-resizing {
   cursor: nwse-resize;
   user-select: none;
+  transition: none;
 }
 
 .guess-map-chrome {
@@ -359,21 +361,6 @@ button {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.guess-map-hint {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 0.4rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(6, 6, 6, 0.34);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--muted);
-  backdrop-filter: blur(10px);
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-align: right;
 }
 
 .guess-map-maptype-controls {

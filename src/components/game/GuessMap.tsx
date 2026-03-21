@@ -1,6 +1,9 @@
 "use client";
 
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type {
+  FocusEvent as ReactFocusEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { useEffect, useRef, useState } from "react";
 import { loadKakaoMaps } from "@/lib/kakao/loadKakaoMaps";
 import type { LatLng } from "@/types/game";
@@ -12,15 +15,19 @@ export type GuessMapSize = {
   height: number;
 };
 
+export type GuessMapSizeChangeReason = "resize" | "collapse" | "restore";
+
 type Props = {
   guess: LatLng | null;
   answer?: LatLng | null;
   interactive?: boolean;
   onGuessChange?: (guess: LatLng) => void;
   size: GuessMapSize;
+  collapsedSize: GuessMapSize;
+  restoredSize: GuessMapSize;
   minSize: GuessMapSize;
   maxSize: GuessMapSize;
-  onSizeChange?: (size: GuessMapSize) => void;
+  onSizeChange?: (size: GuessMapSize, reason: GuessMapSizeChangeReason) => void;
 };
 
 type ResizeState = {
@@ -48,10 +55,13 @@ export function GuessMap({
   interactive = false,
   onGuessChange,
   size,
+  collapsedSize,
+  restoredSize,
   minSize,
   maxSize,
   onSizeChange,
 }: Props) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const kakaoRef = useRef<any>(null);
@@ -64,6 +74,9 @@ export function GuessMap({
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [hasMapFocus, setHasMapFocus] = useState(false);
+  const [isPointerInside, setIsPointerInside] = useState(false);
+  const [isPointerPressed, setIsPointerPressed] = useState(false);
   const [baseMapType, setBaseMapType] = useState<BaseMapType>("ROADMAP");
   const [terrainEnabled, setTerrainEnabled] = useState(false);
 
@@ -93,10 +106,14 @@ export function GuessMap({
         guessMarkerRef.current = new kakao.maps.CustomOverlay({
           map: null,
           content: '<div class="map-pin map-pin-guess"></div>',
+          xAnchor: 0.5,
+          yAnchor: 0.5,
         });
         answerMarkerRef.current = new kakao.maps.CustomOverlay({
           map: null,
           content: '<div class="map-pin map-pin-answer"></div>',
+          xAnchor: 0.5,
+          yAnchor: 0.5,
         });
         lineRef.current = new kakao.maps.Polyline({
           map: null,
@@ -244,6 +261,82 @@ export function GuessMap({
   }, [baseMapType, mapReady, terrainEnabled]);
 
   const canResize = Boolean(onSizeChange);
+  const isMapActive = isResizing || isPointerInside || hasMapFocus || isPointerPressed;
+
+  function areSameSize(left: GuessMapSize, right: GuessMapSize) {
+    return left.width === right.width && left.height === right.height;
+  }
+
+  function hasFocusedControlWithinShell() {
+    if (typeof document === "undefined") return false;
+    const shell = shellRef.current;
+    const activeElement = document.activeElement;
+    return Boolean(shell && activeElement instanceof Node && shell.contains(activeElement));
+  }
+
+  function clearMapFocusIfInactive() {
+    if (!hasFocusedControlWithinShell()) {
+      setHasMapFocus(false);
+    }
+  }
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    function handleDocumentPointerDown(event: PointerEvent) {
+      const shell = shellRef.current;
+      if (!shell) return;
+      if (event.target instanceof Node && shell.contains(event.target)) return;
+
+      setIsPointerPressed(false);
+      setHasMapFocus(false);
+
+      const activeElement = document.activeElement;
+      if (activeElement instanceof HTMLElement && shell.contains(activeElement)) {
+        activeElement.blur();
+      }
+    }
+
+    function handleDocumentPointerEnd() {
+      setIsPointerPressed(false);
+      if (!shellRef.current?.matches(":hover")) {
+        clearMapFocusIfInactive();
+      }
+    }
+
+    function handleWindowBlur() {
+      setIsPointerPressed(false);
+      setHasMapFocus(false);
+      setIsPointerInside(false);
+    }
+
+    document.addEventListener("pointerdown", handleDocumentPointerDown, true);
+    document.addEventListener("pointerup", handleDocumentPointerEnd, true);
+    document.addEventListener("pointercancel", handleDocumentPointerEnd, true);
+    window.addEventListener("blur", handleWindowBlur);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleDocumentPointerDown, true);
+      document.removeEventListener("pointerup", handleDocumentPointerEnd, true);
+      document.removeEventListener("pointercancel", handleDocumentPointerEnd, true);
+      window.removeEventListener("blur", handleWindowBlur);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!canResize || isResizing) return;
+
+    if (isMapActive) {
+      if (!areSameSize(size, restoredSize) && size.width <= collapsedSize.width) {
+        onSizeChange?.(restoredSize, "restore");
+      }
+      return;
+    }
+
+    if (!areSameSize(size, collapsedSize) && size.width > collapsedSize.width) {
+      onSizeChange?.(collapsedSize, "collapse");
+    }
+  }, [canResize, collapsedSize, isMapActive, isResizing, onSizeChange, restoredSize, size]);
 
   function updateSize(clientX: number, clientY: number) {
     const resizeState = resizeStateRef.current;
@@ -255,10 +348,13 @@ export function GuessMap({
       Math.abs(widthDeltaFromX) > Math.abs(widthDeltaFromY) ? widthDeltaFromX : widthDeltaFromY;
     const nextWidth = clamp(resizeState.startWidth + widthDelta, minSize.width, maxSize.width);
 
-    onSizeChange({
-      width: Math.round(nextWidth),
-      height: Math.round(nextWidth / GUESS_MAP_ASPECT_RATIO),
-    });
+    onSizeChange(
+      {
+        width: Math.round(nextWidth),
+        height: Math.round(nextWidth / GUESS_MAP_ASPECT_RATIO),
+      },
+      "resize",
+    );
   }
 
   function endResize(target: HTMLButtonElement, pointerId: number) {
@@ -271,6 +367,9 @@ export function GuessMap({
     if (interactive) {
       setMapInteractionEnabled(true);
     }
+    if (!shellRef.current?.matches(":hover")) {
+      clearMapFocusIfInactive();
+    }
   }
 
   function handleResizePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -278,6 +377,7 @@ export function GuessMap({
 
     event.preventDefault();
     event.stopPropagation();
+    setHasMapFocus(true);
     resizeStateRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -305,10 +405,31 @@ export function GuessMap({
     endResize(event.currentTarget, event.pointerId);
   }
 
+  function handleShellBlur(event: ReactFocusEvent<HTMLDivElement>) {
+    if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) {
+      return;
+    }
+    setHasMapFocus(false);
+  }
+
   return (
     <div
+      ref={shellRef}
       className={`guess-map-shell ${interactive ? "is-interactive" : "is-static"} ${isResizing ? "is-resizing" : ""}`}
       style={{ width: `${size.width}px`, height: `${size.height}px` }}
+      onPointerEnter={() => setIsPointerInside(true)}
+      onPointerLeave={() => {
+        setIsPointerInside(false);
+        if (!isResizing && !isPointerPressed) {
+          clearMapFocusIfInactive();
+        }
+      }}
+      onPointerDownCapture={() => {
+        setHasMapFocus(true);
+        setIsPointerPressed(true);
+      }}
+      onFocus={() => setHasMapFocus(true)}
+      onBlur={handleShellBlur}
     >
       <div className="guess-map-chrome">
         <div className="guess-map-badge">추측 지도</div>
@@ -331,16 +452,12 @@ export function GuessMap({
             지형
           </button>
         </div>
-        <div className="guess-map-hint">
-          {interactive ? "좌상단 핸들로 크기 조절" : "결과 지도를 보고 있습니다"}
-        </div>
       </div>
       {canResize ? (
         <button
           type="button"
           className="guess-map-resize-handle"
-          aria-label="지도 크기 조절"
-          title="드래그해서 지도 크기 조절"
+          aria-label="지도 크기 조절 핸들"
           onPointerDown={handleResizePointerDown}
           onPointerMove={handleResizePointerMove}
           onPointerUp={handleResizePointerUp}

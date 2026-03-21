@@ -16,18 +16,25 @@ import type { LatLng } from "@/types/game";
 type MapSizeBounds = {
   min: GuessMapSize;
   max: GuessMapSize;
+  collapsedSize: GuessMapSize;
   defaultSize: GuessMapSize;
 };
 
-const FALLBACK_MAP_WIDTH = 500;
-const FALLBACK_MAP_SIZE: GuessMapSize = {
-  width: FALLBACK_MAP_WIDTH,
-  height: Math.round(FALLBACK_MAP_WIDTH / GUESS_MAP_ASPECT_RATIO),
+const FALLBACK_COLLAPSED_MAP_WIDTH = 440;
+const FALLBACK_DEFAULT_MAP_WIDTH = 500;
+const FALLBACK_COLLAPSED_MAP_SIZE: GuessMapSize = {
+  width: FALLBACK_COLLAPSED_MAP_WIDTH,
+  height: Math.round(FALLBACK_COLLAPSED_MAP_WIDTH / GUESS_MAP_ASPECT_RATIO),
+};
+const FALLBACK_DEFAULT_MAP_SIZE: GuessMapSize = {
+  width: FALLBACK_DEFAULT_MAP_WIDTH,
+  height: Math.round(FALLBACK_DEFAULT_MAP_WIDTH / GUESS_MAP_ASPECT_RATIO),
 };
 const FALLBACK_MAP_BOUNDS: MapSizeBounds = {
   min: { width: 320, height: Math.round(320 / GUESS_MAP_ASPECT_RATIO) },
   max: { width: 920, height: Math.round(920 / GUESS_MAP_ASPECT_RATIO) },
-  defaultSize: FALLBACK_MAP_SIZE,
+  collapsedSize: FALLBACK_COLLAPSED_MAP_SIZE,
+  defaultSize: FALLBACK_DEFAULT_MAP_SIZE,
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -55,14 +62,19 @@ function getMapSizeBounds(viewportWidth: number, viewportHeight: number): MapSiz
   const maxWidth = Math.max(220, Math.min(widthCap, heightCap * GUESS_MAP_ASPECT_RATIO));
   const minWidthTarget = isMobile ? Math.min(240, availableWidth) : 320;
   const minWidth = Math.min(maxWidth, minWidthTarget);
+  const collapsedWidthTarget = isMobile
+    ? Math.min(availableWidth, 300)
+    : Math.min(viewportWidth * 0.34, 440);
   const defaultWidthTarget = isMobile
     ? Math.min(availableWidth, 340)
     : Math.min(viewportWidth * 0.42, 520);
-  const defaultWidth = clamp(defaultWidthTarget, minWidth, maxWidth);
+  const collapsedWidth = clamp(collapsedWidthTarget, minWidth, maxWidth);
+  const defaultWidth = clamp(defaultWidthTarget, collapsedWidth, maxWidth);
 
   return {
     min: toMapSize(minWidth),
     max: toMapSize(maxWidth),
+    collapsedSize: toMapSize(collapsedWidth),
     defaultSize: toMapSize(defaultWidth),
   };
 }
@@ -73,7 +85,8 @@ export default function PlayPage() {
   const [guess, setGuess] = useState<LatLng | null>(null);
   const [dismissedRule, setDismissedRule] = useState(false);
   const [mapSizeBounds, setMapSizeBounds] = useState<MapSizeBounds>(FALLBACK_MAP_BOUNDS);
-  const [mapSize, setMapSize] = useState<GuessMapSize>(FALLBACK_MAP_SIZE);
+  const [mapSize, setMapSize] = useState<GuessMapSize>(FALLBACK_COLLAPSED_MAP_SIZE);
+  const [restoredMapSize, setRestoredMapSize] = useState<GuessMapSize>(FALLBACK_DEFAULT_MAP_SIZE);
   const [panoramaReady, setPanoramaReady] = useState(false);
   const [retryingPanorama, setRetryingPanorama] = useState(false);
   const failedRoundIdsRef = useRef<string[]>([]);
@@ -88,10 +101,15 @@ export default function PlayPage() {
     function syncMapBounds(preserveCurrentSize: boolean) {
       const nextBounds = getMapSizeBounds(window.innerWidth, window.innerHeight);
       setMapSizeBounds(nextBounds);
+      setRestoredMapSize((currentSize) =>
+        preserveCurrentSize
+          ? clampMapSize(currentSize, nextBounds.collapsedSize, nextBounds.max)
+          : nextBounds.defaultSize,
+      );
       setMapSize((currentSize) =>
         preserveCurrentSize
           ? clampMapSize(currentSize, nextBounds.min, nextBounds.max)
-          : nextBounds.defaultSize,
+          : nextBounds.collapsedSize,
       );
     }
 
@@ -288,11 +306,23 @@ export default function PlayPage() {
                 interactive={!result}
                 onGuessChange={(nextGuess) => setGuess(nextGuess)}
                 size={mapSize}
+                collapsedSize={mapSizeBounds.collapsedSize}
+                restoredSize={restoredMapSize}
                 minSize={mapSizeBounds.min}
                 maxSize={mapSizeBounds.max}
-                onSizeChange={(nextSize) =>
-                  setMapSize(clampMapSize(nextSize, mapSizeBounds.min, mapSizeBounds.max))
-                }
+                onSizeChange={(nextSize, reason) => {
+                  const clampedVisibleSize = clampMapSize(nextSize, mapSizeBounds.min, mapSizeBounds.max);
+                  setMapSize(clampedVisibleSize);
+
+                  if (
+                    (reason === "resize" || reason === "restore") &&
+                    clampedVisibleSize.width > mapSizeBounds.collapsedSize.width
+                  ) {
+                    setRestoredMapSize(
+                      clampMapSize(clampedVisibleSize, mapSizeBounds.collapsedSize, mapSizeBounds.max),
+                    );
+                  }
+                }}
               />
               {submitting && !result ? (
                 <div className="minimap-submit-overlay">
