@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createId } from "@/lib/game/createId";
 import { haversineDistanceKm } from "@/lib/game/distance";
 import { selectRounds } from "@/lib/game/roundSelector";
 import { calculateRoundScore } from "@/lib/game/score";
@@ -9,14 +10,6 @@ import { toGameSnapshot } from "@/lib/game/snapshot";
 import type { GameSession, GameSnapshot, LatLng, RoundResult, SeedRound } from "@/types/game";
 
 const STORAGE_KEY = "kgeoguessr_session";
-
-function createId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 function createSession(excludedRoundIds: string[] = []): GameSession {
   return {
