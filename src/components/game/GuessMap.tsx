@@ -160,6 +160,10 @@ export function GuessMap({
   }, [interactive, isResizing, mapReady]);
 
   useEffect(() => {
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
     const resizeObserver = new ResizeObserver(() => {
       if (!mapRef.current) return;
       const center = mapRef.current.getCenter?.();

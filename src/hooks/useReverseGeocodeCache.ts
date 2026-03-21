@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isLatLng } from "@/lib/game/validators";
 import { reverseGeocode } from "@/lib/kakao/reverseGeocode";
 import type { LatLng } from "@/types/game";
 
@@ -18,7 +19,7 @@ export function useReverseGeocodeCache(location: LatLng | null) {
   });
 
   useEffect(() => {
-    if (!location) {
+    if (!location || !isLatLng(location)) {
       setState({ address: null, loading: false, error: null });
       return;
     }

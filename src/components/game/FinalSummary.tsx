@@ -9,10 +9,11 @@ type Props = {
 };
 
 export function FinalSummary({ totalScore, history, restarting, onRestart }: Props) {
+  const safeHistory = history.filter((result) => Number.isFinite(result.distanceKm));
   const averageDistance =
-    history.length === 0
+    safeHistory.length === 0
       ? 0
-      : history.reduce((sum, result) => sum + result.distanceKm, 0) / history.length;
+      : safeHistory.reduce((sum, result) => sum + result.distanceKm, 0) / safeHistory.length;
 
   return (
     <div className="glass-panel final-summary-content">
@@ -23,7 +24,7 @@ export function FinalSummary({ totalScore, history, restarting, onRestart }: Pro
       </p>
       
       <div className="history-list" style={{ textAlign: "left", marginBottom: "3rem" }}>
-        {history.map((result) => (
+        {safeHistory.map((result) => (
           <div key={result.roundId} className="history-row" style={{ display: "flex", justifyContent: "space-between", padding: "1rem 1.5rem", background: "rgba(255,255,255,0.05)", border: "none", borderBottom: "1px solid var(--line)", borderRadius: 0 }}>
             <span style={{ fontWeight: 800, color: "var(--muted)" }}>Round {result.roundNumber}</span>
             <span style={{ fontWeight: 700, color: "var(--secondary)" }}>+{result.score.toLocaleString()}점</span>

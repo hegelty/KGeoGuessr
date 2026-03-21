@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { SeedRound } from "@/types/game";
 
 type RandomAnchor = {
@@ -414,7 +413,7 @@ function pickRandomAnchor(anchors: RandomAnchor[]) {
 }
 
 function createRoundId(anchorId: string) {
-  return `${anchorId}${ROUND_ID_SEPARATOR}${randomUUID()}`;
+  return `${anchorId}${ROUND_ID_SEPARATOR}${crypto.randomUUID()}`;
 }
 
 function getAnchorIdFromRoundId(roundId: string) {

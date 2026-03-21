@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
+import { isLatLng } from "@/lib/game/validators";
 import { useReverseGeocodeCache } from "@/hooks/useReverseGeocodeCache";
 import type { RoundResult } from "@/types/game";
 
@@ -11,7 +12,9 @@ type Props = {
 };
 
 export function ResultPanel({ result, busy, onNext }: Props) {
-  const { address, loading, error } = useReverseGeocodeCache(result.answer);
+  const hasValidAnswer = isLatLng(result.answer);
+  const hasValidDistance = Number.isFinite(result.distanceKm);
+  const { address, loading, error } = useReverseGeocodeCache(hasValidAnswer ? result.answer : null);
 
   return (
     <div className="glass-panel card" style={{ width: "100%", maxWidth: "400px", zIndex: 50 }}>
@@ -21,12 +24,16 @@ export function ResultPanel({ result, busy, onNext }: Props) {
       <div className="result-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
         <div>
           <span className="result-label">오차 거리</span>
-          <strong style={{ fontSize: "1.2rem", display: "block" }}>{result.distanceKm.toFixed(2)} km</strong>
+          <strong style={{ fontSize: "1.2rem", display: "block" }}>
+            {hasValidDistance ? `${result.distanceKm.toFixed(2)} km` : "결과 없음"}
+          </strong>
         </div>
         <div>
           <span className="result-label">실제 로드뷰 좌표</span>
           <strong style={{ fontSize: "0.9rem", display: "block" }}>
-            {result.answer.lat.toFixed(4)}, {result.answer.lng.toFixed(4)}
+            {hasValidAnswer
+              ? `${result.answer.lat.toFixed(4)}, ${result.answer.lng.toFixed(4)}`
+              : "좌표 없음"}
           </strong>
         </div>
       </div>
