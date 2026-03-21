@@ -1,15 +1,19 @@
+import { ShareMenu } from "@/components/game/ShareMenu";
 import { Button } from "@/components/ui/Button";
+import type { ShareAction } from "@/types/game";
 
 type Props = {
   totalScore: number;
   canSubmit: boolean;
   submitting: boolean;
   sharing: boolean;
+  shareAction: ShareAction;
   panoramaReady: boolean;
   hasGuess: boolean;
   shareMessage: string | null;
   onSubmit: () => void;
-  onShare: () => void;
+  onShareCopyLink: () => void;
+  onShareKakao: () => void;
 };
 
 export function RoundHud({
@@ -17,11 +21,13 @@ export function RoundHud({
   canSubmit,
   submitting,
   sharing,
+  shareAction,
   panoramaReady,
   hasGuess,
   shareMessage,
   onSubmit,
-  onShare,
+  onShareCopyLink,
+  onShareKakao,
 }: Props) {
   const helperText = !panoramaReady
     ? "로드뷰 실제 위치를 확인하는 중입니다."
@@ -41,9 +47,15 @@ export function RoundHud({
       </div>
       <p className="hud-copy">{helperText}</p>
       <div className="hud-actions">
-        <Button className="button-secondary" onClick={onShare} disabled={sharing}>
-          {sharing ? "링크 준비 중..." : "게임 공유"}
-        </Button>
+        <ShareMenu
+          sharing={sharing}
+          shareAction={shareAction}
+          kakaoAction="kakao-map"
+          kakaoLabel="카카오톡 공유"
+          onCopyLink={onShareCopyLink}
+          onKakaoShare={onShareKakao}
+          buttonClassName="button-secondary"
+        />
         <Button className="button-primary" onClick={onSubmit} disabled={!canSubmit || submitting}>
           {submitting ? "제출 중..." : "추측 제출"}
         </Button>

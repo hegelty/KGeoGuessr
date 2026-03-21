@@ -10,10 +10,14 @@ import {
   parseSharedSessionFromUrl,
   stripSharedSessionFromUrl,
 } from "@/lib/game/share";
+import {
+  shareMapToKakaoTalk as sendMapShareToKakaoTalk,
+  shareResultToKakaoTalk as sendResultShareToKakaoTalk,
+} from "@/lib/kakao/share";
 import { hasActiveRound, loadStoredSession, saveStoredSession } from "@/lib/game/sessionState";
 import { isLatLng } from "@/lib/game/validators";
 import { toGameSnapshot } from "@/lib/game/snapshot";
-import type { GameSession, GameSnapshot, LatLng } from "@/types/game";
+import type { GameSession, GameSnapshot, LatLng, RoundResult, ShareAction } from "@/types/game";
 
 function createSession(excludedRoundIds: string[] = []): GameSession {
   return {
@@ -30,9 +34,11 @@ export function useGameSession() {
   const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [sharing, setSharing] = useState(false);
+  const [shareAction, setShareAction] = useState<ShareAction>(null);
   const [error, setError] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
+
+  const sharing = shareAction !== null;
 
   useEffect(() => {
     if (!shareMessage) return;
@@ -158,18 +164,28 @@ export function useGameSession() {
     }
   }
 
-  async function shareCurrentGame() {
-    setSharing(true);
+  function getShareContext() {
+    const session = loadStoredSession();
+
+    if (!session || !hasActiveRound(session)) {
+      throw new Error("공유할 진행 중 게임이 없습니다.");
+    }
+
+    const shareUrl = buildSharedSessionUrl(session, window.location.href);
+    const sharePath = (() => {
+      const url = new URL(shareUrl);
+      return `${url.pathname}${url.search}${url.hash}`.replace(/^\/+/, "");
+    })();
+
+    return { session, sharePath, shareUrl };
+  }
+
+  async function copyShareLink() {
+    setShareAction("copy-link");
     setShareMessage(null);
 
     try {
-      const session = loadStoredSession();
-
-      if (!session || !hasActiveRound(session)) {
-        throw new Error("공유할 진행 중 게임이 없습니다.");
-      }
-
-      const shareUrl = buildSharedSessionUrl(session, window.location.href);
+      const { shareUrl } = getShareContext();
 
       if (navigator.clipboard?.writeText) {
         try {
@@ -177,23 +193,7 @@ export function useGameSession() {
           setShareMessage("공유 링크를 클립보드에 복사했습니다.");
           return shareUrl;
         } catch {
-          // Fall through to other sharing options below.
-        }
-      }
-
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: "KGeoGuessr",
-            text: "현재 진행 중인 KGeoGuessr 게임입니다.",
-            url: shareUrl,
-          });
-          setShareMessage("공유 시트를 열었습니다.");
-          return shareUrl;
-        } catch (shareError) {
-          if (shareError instanceof DOMException && shareError.name === "AbortError") {
-            return null;
-          }
+          // Fall through to the prompt below.
         }
       }
 
@@ -204,7 +204,56 @@ export function useGameSession() {
       setShareMessage(nextError instanceof Error ? nextError.message : "공유 링크를 만들지 못했습니다.");
       return null;
     } finally {
-      setSharing(false);
+      setShareAction(null);
+    }
+  }
+
+  async function shareGameToKakaoTalk() {
+    setShareAction("kakao-map");
+    setShareMessage(null);
+
+    try {
+      const { sharePath, shareUrl } = getShareContext();
+
+      await sendMapShareToKakaoTalk({
+        sharePath,
+        shareUrl,
+        title: "KGeoGuessr 같이 한 판 할래?",
+        contents:
+          "카카오 로드뷰를 보고 대한민국 어디인지 맞히는 랜덤 한 판 게임이에요. 같은 맵으로 바로 들어와서 같이 맞혀보세요.",
+      });
+      setShareMessage("카카오톡 공유 창을 열었습니다.");
+      return shareUrl;
+    } catch (nextError) {
+      setShareMessage(nextError instanceof Error ? nextError.message : "카카오톡 공유를 열지 못했습니다.");
+      return null;
+    } finally {
+      setShareAction(null);
+    }
+  }
+
+  async function shareResultToKakaoTalk(result: RoundResult) {
+    setShareAction("kakao-result");
+    setShareMessage(null);
+
+    try {
+      const { sharePath, shareUrl, session } = getShareContext();
+      const totalScoreText = `${session.totalScore.toLocaleString()}점`;
+      const distanceText = `${result.distanceKm.toFixed(2)}km`;
+
+      await sendResultShareToKakaoTalk({
+        sharePath,
+        shareUrl,
+        title: `KGeoGuessr 결과: ${totalScoreText}`,
+        contents: `이번 기록은 ${totalScoreText}, 오차 ${distanceText}였어요. 같은 맵을 바로 열어서 도전해보세요.`,
+      });
+      setShareMessage("카카오톡 결과 공유 창을 열었습니다.");
+      return shareUrl;
+    } catch (nextError) {
+      setShareMessage(nextError instanceof Error ? nextError.message : "카카오톡 결과 공유를 열지 못했습니다.");
+      return null;
+    } finally {
+      setShareAction(null);
     }
   }
 
@@ -213,11 +262,14 @@ export function useGameSession() {
     loading,
     submitting,
     sharing,
+    shareAction,
     error,
     shareMessage,
     restart,
     submitGuess,
     resolvePanorama,
-    shareCurrentGame,
+    copyShareLink,
+    shareGameToKakaoTalk,
+    shareResultToKakaoTalk,
   };
 }

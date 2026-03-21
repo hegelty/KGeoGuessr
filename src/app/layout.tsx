@@ -3,7 +3,7 @@ import "@/styles/globals.css";
 
 export const metadata: Metadata = {
   title: "KGeoGuessr",
-  description: "NAVER Panorama-based Korea GeoGuessr MVP",
+  description: "카카오 로드뷰로 대한민국 어디인지 맞히는 랜덤 한 판 웹 게임",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

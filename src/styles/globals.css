@@ -89,6 +89,15 @@ button {
   line-height: 1.6;
 }
 
+.landing-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-top: 2rem;
+}
+
 .landing-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -319,6 +328,60 @@ button {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text);
   border: var(--glass-border);
+}
+
+.share-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.share-menu.is-block {
+  display: block;
+  width: 100%;
+}
+
+.share-menu.is-block .button {
+  width: 100%;
+}
+
+.share-menu-popover {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  min-width: 220px;
+  padding: 0.45rem;
+  border-radius: var(--radius-md);
+  z-index: 40;
+}
+
+.share-menu.align-right .share-menu-popover {
+  right: 0;
+}
+
+.share-menu.align-left .share-menu-popover {
+  left: 0;
+}
+
+.share-menu-item {
+  width: 100%;
+  border: 0;
+  border-radius: calc(var(--radius-md) - 4px);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  padding: 0.85rem 0.95rem;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.share-menu-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.share-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .button-block {
@@ -732,6 +795,12 @@ button {
     width: 100%;
     margin-left: 0;
     justify-content: space-between;
+  }
+
+  .share-menu-popover {
+    left: 0;
+    right: auto;
+    width: min(100%, 260px);
   }
 
   .hud-share-feedback {

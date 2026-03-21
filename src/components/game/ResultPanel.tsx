@@ -1,17 +1,32 @@
 "use client";
 
+import { ShareMenu } from "@/components/game/ShareMenu";
 import { Button } from "@/components/ui/Button";
 import { isLatLng } from "@/lib/game/validators";
 import { useReverseGeocodeCache } from "@/hooks/useReverseGeocodeCache";
-import type { RoundResult } from "@/types/game";
+import type { RoundResult, ShareAction } from "@/types/game";
 
 type Props = {
   result: RoundResult;
   busy: boolean;
+  sharing: boolean;
+  shareAction: ShareAction;
+  shareMessage: string | null;
+  onShareCopyLink: () => void;
+  onShareKakao: () => void;
   onNext: () => void;
 };
 
-export function ResultPanel({ result, busy, onNext }: Props) {
+export function ResultPanel({
+  result,
+  busy,
+  sharing,
+  shareAction,
+  shareMessage,
+  onShareCopyLink,
+  onShareKakao,
+  onNext,
+}: Props) {
   const hasValidAnswer = isLatLng(result.answer);
   const hasValidDistance = Number.isFinite(result.distanceKm);
   const { address, loading, error } = useReverseGeocodeCache(hasValidAnswer ? result.answer : null);
@@ -45,6 +60,23 @@ export function ResultPanel({ result, busy, onNext }: Props) {
         </strong>
         {error ? <p className="muted-text" style={{ fontSize: "0.8rem", marginTop: "0.25rem" }}>{error}</p> : null}
       </div>
+
+      <ShareMenu
+        sharing={sharing}
+        shareAction={shareAction}
+        kakaoAction="kakao-result"
+        kakaoLabel="카카오톡 결과 공유"
+        onCopyLink={onShareCopyLink}
+        onKakaoShare={onShareKakao}
+        buttonClassName="button-secondary button-block"
+        block
+        disabled={busy}
+      />
+      {shareMessage ? (
+        <p className="muted-text" style={{ fontSize: "0.85rem", marginTop: "0.75rem", marginBottom: 0 }}>
+          {shareMessage}
+        </p>
+      ) : null}
       
       <Button className="button-primary button-block" onClick={onNext} disabled={busy}>
         {busy ? "처리 중..." : "다음 랜덤 장소"}

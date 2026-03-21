@@ -60,3 +60,5 @@ export type GameSession = {
   results: RoundResult[];
   startedAt: string;
 };
+
+export type ShareAction = "copy-link" | "kakao-map" | "kakao-result" | null;

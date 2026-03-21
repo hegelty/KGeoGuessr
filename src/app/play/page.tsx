@@ -85,12 +85,15 @@ export default function PlayPage() {
     loading,
     submitting,
     sharing,
+    shareAction,
     error,
     shareMessage,
     restart,
     submitGuess,
     resolvePanorama,
-    shareCurrentGame,
+    copyShareLink,
+    shareGameToKakaoTalk,
+    shareResultToKakaoTalk,
   } = useGameSession();
   const [guess, setGuess] = useState<LatLng | null>(null);
   const [dismissedRule, setDismissedRule] = useState(false);
@@ -245,13 +248,17 @@ export default function PlayPage() {
               canSubmit={!result && Boolean(guess) && panoramaReady}
               submitting={submitting}
               sharing={sharing}
+              shareAction={shareAction}
               shareMessage={shareMessage}
               onSubmit={() => {
                 if (!guess) return;
                 void submitGuess(guess);
               }}
-              onShare={() => {
-                void shareCurrentGame();
+              onShareCopyLink={() => {
+                void copyShareLink();
+              }}
+              onShareKakao={() => {
+                void shareGameToKakaoTalk();
               }}
             />
           </div>
@@ -304,6 +311,15 @@ export default function PlayPage() {
               <ResultPanel
                 result={result}
                 busy={submitting}
+                sharing={sharing}
+                shareAction={shareAction}
+                shareMessage={shareMessage}
+                onShareCopyLink={() => {
+                  void copyShareLink();
+                }}
+                onShareKakao={() => {
+                  void shareResultToKakaoTalk(result);
+                }}
                 onNext={() => {
                   setGuess(null);
                   setPanoramaReady(false);
